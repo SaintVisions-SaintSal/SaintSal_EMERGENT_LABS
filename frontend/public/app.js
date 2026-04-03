@@ -14660,9 +14660,9 @@ function showTierGate(feature, requiredTier, message) {
   var tiers = document.getElementById('tierGateTiers');
   if (tiers) {
     var tierList = [
-      { id: 'starter', name: 'Starter', price: '$19', color: '#10B981' },
-      { id: 'pro', name: 'Pro', price: '$49', color: '#8B5CF6' },
-      { id: 'teams', name: 'Teams', price: '$149', color: '#F59E0B' }
+      { id: 'starter', name: 'Starter', price: '$27', color: '#10B981' },
+      { id: 'pro', name: 'Pro', price: '$97', color: '#8B5CF6' },
+      { id: 'teams', name: 'Teams', price: '$297', color: '#F59E0B' }
     ];
     var h = '';
     tierList.forEach(function(t) {
