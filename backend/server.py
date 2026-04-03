@@ -50,6 +50,7 @@ _PROD_ORIGINS = [
     "https://www.saintsallabs.com",
     "https://saintsal.ai",
     "https://www.saintsal.ai",
+    "https://sal-preview-deploy.emergent.host",
 ]
 _DEV_ORIGINS = ["http://localhost:3000", "http://localhost:5173", "https://sal-preview-deploy.preview.emergentagent.com"]
 ALLOWED_ORIGINS = _PROD_ORIGINS + (_DEV_ORIGINS if os.environ.get("ENV") != "production" else [])
