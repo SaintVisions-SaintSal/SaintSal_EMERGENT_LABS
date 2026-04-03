@@ -41,6 +41,7 @@
 
     // BUSINESS TOOLS
     { id: 'b-patent',      label: 'IP / Patent Search',desc: 'Prior art & patent intelligence',icon: 'PT', category: 'Business',    action: function(){ navigate('launchpad'); setTimeout(function(){ if(typeof bcSetTab==='function') bcSetTab('patent'); }, 200); }},
+    { id: 'b-bizplan',     label: 'Business Plan AI', desc: 'Generate investor-grade plans',   icon: 'BP', category: 'Business',    action: function(){ navigate('launchpad'); setTimeout(function(){ if(typeof bcSetTab==='function') bcSetTab('bizplan'); }, 200); }},
     { id: 'b-formation',   label: 'Entity Formation', desc: 'LLC, Corp, EIN filing',          icon: 'EF', category: 'Business',     action: function(){ navigate('launchpad'); setTimeout(function(){ if(typeof bcSetTab==='function') bcSetTab('formation'); }, 200); }},
 
     // SYSTEM
@@ -56,6 +57,27 @@
   var selectedIdx = 0;
   var filteredItems = CMD_ITEMS.slice();
   var overlay, searchInput, resultsList;
+  var RECENT_KEY = 'sal_cmd_recent';
+  var MAX_RECENT = 5;
+
+  function getRecent() {
+    try { return JSON.parse(localStorage.getItem(RECENT_KEY) || '[]'); } catch(e) { return []; }
+  }
+  function addRecent(id) {
+    var recent = getRecent().filter(function(r) { return r !== id; });
+    recent.unshift(id);
+    if (recent.length > MAX_RECENT) recent = recent.slice(0, MAX_RECENT);
+    localStorage.setItem(RECENT_KEY, JSON.stringify(recent));
+  }
+  function getRecentItems() {
+    var recent = getRecent();
+    var items = [];
+    recent.forEach(function(rid) {
+      var found = CMD_ITEMS.filter(function(c) { return c.id === rid; })[0];
+      if (found) items.push(Object.assign({}, found, { category: 'Recently Used' }));
+    });
+    return items;
+  }
 
   // ─── Build DOM ────────────────────────────────────────────────
   function buildPalette() {
@@ -104,7 +126,8 @@
   function filterItems(query) {
     var q = query.toLowerCase().trim();
     if (!q) {
-      filteredItems = CMD_ITEMS.slice();
+      var recent = getRecentItems();
+      filteredItems = recent.length > 0 ? recent.concat(CMD_ITEMS) : CMD_ITEMS.slice();
     } else {
       filteredItems = CMD_ITEMS.filter(function(item) {
         return item.label.toLowerCase().indexOf(q) !== -1 ||
@@ -176,6 +199,7 @@
   function executeSelected() {
     var item = filteredItems[selectedIdx];
     if (item && item.action) {
+      addRecent(item.id);
       closePalette();
       item.action();
     }
@@ -185,7 +209,8 @@
   function openPalette() {
     buildPalette();
     isOpen = true;
-    filteredItems = CMD_ITEMS.slice();
+    var recent = getRecentItems();
+    filteredItems = recent.length > 0 ? recent.concat(CMD_ITEMS) : CMD_ITEMS.slice();
     selectedIdx = 0;
     overlay.classList.add('cmd-visible');
     searchInput.value = '';

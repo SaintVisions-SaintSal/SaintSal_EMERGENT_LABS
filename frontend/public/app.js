@@ -13392,6 +13392,7 @@ function renderCookinCards() {
     '<div style="padding:16px 20px 0;">' +
       '<div id="cc-tabs" style="display:flex;gap:6px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:12px;padding:4px;">' +
         '<button onclick="ccSwitchTab(\'price\',this)" id="cc-tab-price" style="flex:1;padding:8px;border-radius:8px;border:none;font-size:11px;font-weight:700;cursor:pointer;transition:all 0.2s;background:rgba(245,158,11,0.2);color:#F59E0B;">💰 Price</button>' +
+        '<button onclick="ccSwitchTab(\'scan\',this)" id="cc-tab-scan" style="flex:1;padding:8px;border-radius:8px;border:none;font-size:11px;font-weight:700;cursor:pointer;transition:all 0.2s;background:transparent;color:#555;">📸 Scan</button>' +
         '<button onclick="ccSwitchTab(\'deals\',this)" id="cc-tab-deals" style="flex:1;padding:8px;border-radius:8px;border:none;font-size:11px;font-weight:700;cursor:pointer;transition:all 0.2s;background:transparent;color:#555;">🔥 Deals</button>' +
         '<button onclick="ccSwitchTab(\'portfolio\',this)" id="cc-tab-portfolio" style="flex:1;padding:8px;border-radius:8px;border:none;font-size:11px;font-weight:700;cursor:pointer;transition:all 0.2s;background:transparent;color:#555;">📊 Portfolio</button>' +
         '<button onclick="ccSwitchTab(\'rare\',this)" id="cc-tab-rare" style="flex:1;padding:8px;border-radius:8px;border:none;font-size:11px;font-weight:700;cursor:pointer;transition:all 0.2s;background:transparent;color:#555;">🍬 Rare</button>' +
@@ -13409,6 +13410,33 @@ function renderCookinCards() {
     // ── TAB PANELS ──
     '<div id="cc-panel-price" style="padding:16px 20px;display:block;">' +
       '<div id="cc-results-price" style="color:#555;text-align:center;padding:40px 0;font-size:13px;">Search for any trading card above — prices, PSA grades, recent sales</div>' +
+    '</div>' +
+
+    '<div id="cc-panel-scan" style="padding:16px 20px;display:none;">' +
+      '<div style="display:flex;align-items:center;gap:8px;margin-bottom:16px;">' +
+        '<div style="font-size:16px;font-weight:900;color:#E5E5E5;">📸 Card Scanner</div>' +
+        '<div style="background:rgba(139,92,246,0.15);border:1px solid rgba(139,92,246,0.3);color:#a78bfa;padding:2px 10px;border-radius:20px;font-size:10px;font-weight:700;">AI POWERED</div>' +
+      '</div>' +
+      '<div style="background:rgba(255,255,255,0.03);border:2px dashed rgba(245,158,11,0.3);border-radius:16px;padding:32px;text-align:center;margin-bottom:16px;cursor:pointer;transition:border-color 0.2s;" onclick="document.getElementById(\'cc-scan-input\').click()" onmouseenter="this.style.borderColor=\'rgba(245,158,11,0.6)\'" onmouseleave="this.style.borderColor=\'rgba(245,158,11,0.3)\'">' +
+        '<div style="font-size:36px;margin-bottom:8px;">📷</div>' +
+        '<div style="color:#F59E0B;font-weight:700;font-size:14px;margin-bottom:4px;">Upload Card Photo</div>' +
+        '<div style="color:#555;font-size:11px;margin-bottom:12px;">Take a photo or upload an image to identify & grade</div>' +
+        '<input type="file" id="cc-scan-input" data-testid="cc-scan-input" accept="image/*" capture="camera" style="display:none;" onchange="ccHandleScanUpload(this)">' +
+        '<div style="display:flex;gap:8px;justify-content:center;">' +
+          '<span style="background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.2);color:#F59E0B;padding:4px 12px;border-radius:8px;font-size:10px;font-weight:600;">JPG / PNG</span>' +
+          '<span style="background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.2);color:#F59E0B;padding:4px 12px;border-radius:8px;font-size:10px;font-weight:600;">Camera</span>' +
+        '</div>' +
+      '</div>' +
+      '<div style="display:flex;gap:8px;margin-bottom:16px;">' +
+        '<input id="cc-scan-url" data-testid="cc-scan-url" placeholder="Or paste an image URL..." style="flex:1;background:rgba(255,255,255,0.05);border:1px solid rgba(245,158,11,0.2);border-radius:10px;padding:10px 14px;color:#E5E5E5;font-size:12px;box-sizing:border-box;outline:none;" />' +
+        '<button data-testid="cc-scan-url-btn" onclick="ccScanFromURL()" style="background:#F59E0B;border:none;border-radius:10px;padding:10px 16px;color:#000;font-weight:700;font-size:12px;cursor:pointer;white-space:nowrap;">Scan</button>' +
+      '</div>' +
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px;">' +
+        '<button data-testid="cc-scan-type-tcg" onclick="ccScanState.cardType=\'tcg\';this.style.background=\'rgba(245,158,11,0.2)\';this.style.color=\'#F59E0B\';this.nextElementSibling.style.background=\'transparent\';this.nextElementSibling.style.color=\'#555\'" style="padding:10px;border-radius:10px;border:1px solid rgba(245,158,11,0.2);cursor:pointer;font-size:12px;font-weight:700;background:rgba(245,158,11,0.2);color:#F59E0B;">TCG (Pokemon/MTG/Yu-Gi-Oh)</button>' +
+        '<button data-testid="cc-scan-type-sport" onclick="ccScanState.cardType=\'sport\';this.style.background=\'rgba(245,158,11,0.2)\';this.style.color=\'#F59E0B\';this.previousElementSibling.style.background=\'transparent\';this.previousElementSibling.style.color=\'#555\'" style="padding:10px;border-radius:10px;border:1px solid rgba(245,158,11,0.2);cursor:pointer;font-size:12px;font-weight:700;background:transparent;color:#555;">Sports Cards</button>' +
+      '</div>' +
+      '<div id="cc-scan-preview" style="display:none;margin-bottom:16px;text-align:center;"></div>' +
+      '<div id="cc-scan-results" data-testid="cc-scan-results"></div>' +
     '</div>' +
 
     '<div id="cc-panel-deals" style="padding:16px 20px;display:none;">' +
@@ -13492,7 +13520,7 @@ function ccGetPortfolioHTML() {
 }
 
 function ccSwitchTab(tab, btn) {
-  ['price','deals','portfolio','rare'].forEach(function(t) {
+  ['price','scan','deals','portfolio','rare'].forEach(function(t) {
     var panel = document.getElementById('cc-panel-' + t);
     var tabBtn = document.getElementById('cc-tab-' + t);
     if (panel) panel.style.display = t === tab ? 'block' : 'none';
@@ -13572,6 +13600,151 @@ function ccLoadDeals() {
     read();
   }).catch(function() { panel.innerHTML = '<div style="color:#f87171;text-align:center;padding:20px;">Unable to fetch deals. Try again.</div>'; });
 }
+// ─── COOKIN CARDS — SCAN & GRADE ──────────────────────────────────────────────
+
+var ccScanState = { cardType: 'tcg', scanning: false };
+
+function ccHandleScanUpload(input) {
+  if (!input.files || !input.files[0]) return;
+  var file = input.files[0];
+  var reader = new FileReader();
+  reader.onload = function(e) {
+    var base64 = e.target.result.split(',')[1];
+    var preview = document.getElementById('cc-scan-preview');
+    if (preview) {
+      preview.style.display = 'block';
+      preview.innerHTML = '<img src="' + e.target.result + '" style="max-width:200px;max-height:200px;border-radius:12px;border:2px solid rgba(245,158,11,0.3);">';
+    }
+    ccRunScan('', base64);
+  };
+  reader.readAsDataURL(file);
+}
+
+function ccScanFromURL() {
+  var url = document.getElementById('cc-scan-url');
+  if (!url || !url.value.trim()) return;
+  var preview = document.getElementById('cc-scan-preview');
+  if (preview) {
+    preview.style.display = 'block';
+    preview.innerHTML = '<img src="' + url.value.trim() + '" style="max-width:200px;max-height:200px;border-radius:12px;border:2px solid rgba(245,158,11,0.3);" onerror="this.style.display=\'none\'">';
+  }
+  ccRunScan(url.value.trim(), '');
+}
+
+async function ccRunScan(imageUrl, imageBase64) {
+  var results = document.getElementById('cc-scan-results');
+  if (!results) return;
+  results.innerHTML = '<div style="text-align:center;padding:24px;"><div style="font-size:24px;animation:ccFloat 1s ease-in-out infinite;">🔍</div><div style="color:#F59E0B;font-size:13px;font-weight:700;margin-top:8px;">Identifying card...</div></div>';
+
+  try {
+    // Step 1: Identify
+    var scanBody = { card_type: ccScanState.cardType };
+    if (imageUrl) scanBody.image_url = imageUrl;
+    if (imageBase64) scanBody.image_base64 = imageBase64;
+
+    var scanRes = await fetch(API + '/api/cards/scan', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(scanBody)
+    });
+    var scanData = await scanRes.json();
+
+    if (scanData.error) {
+      results.innerHTML = '<div style="background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);border-radius:12px;padding:16px;color:#f87171;font-size:12px;">Scan error: ' + scanData.error + '</div>';
+      return;
+    }
+
+    // Step 2: Grade
+    results.innerHTML = '<div style="text-align:center;padding:24px;"><div style="font-size:24px;animation:ccFloat 1s ease-in-out infinite;">📊</div><div style="color:#F59E0B;font-size:13px;font-weight:700;margin-top:8px;">Grading card...</div></div>';
+
+    var gradeBody = {};
+    if (imageUrl) gradeBody.image_url = imageUrl;
+    if (imageBase64) gradeBody.image_base64 = imageBase64;
+
+    var gradeRes = await fetch(API + '/api/cards/grade', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(gradeBody)
+    });
+    var gradeData = await gradeRes.json();
+
+    // Render results
+    var h = '<div style="background:rgba(245,158,11,0.05);border:1px solid rgba(245,158,11,0.2);border-radius:16px;padding:20px;margin-bottom:12px;">';
+    h += '<div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;">';
+    h += '<div style="font-size:24px;">🃏</div>';
+    h += '<div>';
+    h += '<div style="font-size:16px;font-weight:900;color:#F59E0B;">' + (scanData.card_name || 'Unknown Card') + '</div>';
+    if (scanData.card_set) h += '<div style="font-size:11px;color:#888;">' + scanData.card_set + (scanData.card_number ? ' #' + scanData.card_number : '') + '</div>';
+    h += '</div>';
+    if (scanData.confidence) h += '<div style="margin-left:auto;background:rgba(34,197,94,0.15);border:1px solid rgba(34,197,94,0.3);color:#22c55e;padding:4px 10px;border-radius:8px;font-size:10px;font-weight:700;">' + Math.round(scanData.confidence * 100) + '% match</div>';
+    h += '</div>';
+
+    // Grade display
+    if (gradeData.overall_grade) {
+      var grade = gradeData.overall_grade;
+      var gradeColor = grade >= 9 ? '#22c55e' : grade >= 7 ? '#F59E0B' : '#ef4444';
+      h += '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:14px;">';
+      h += '<div style="background:rgba(0,0,0,0.3);border-radius:10px;padding:12px;text-align:center;">';
+      h += '<div style="font-size:28px;font-weight:900;color:' + gradeColor + ';">' + grade.toFixed(1) + '</div>';
+      h += '<div style="font-size:9px;color:#888;letter-spacing:1px;margin-top:2px;">OVERALL</div>';
+      h += '<div style="font-size:10px;color:' + gradeColor + ';font-weight:700;margin-top:4px;">' + (gradeData.grade_label || '') + '</div></div>';
+      h += '<div style="background:rgba(0,0,0,0.3);border-radius:10px;padding:12px;text-align:center;">';
+      h += '<div style="font-size:18px;font-weight:700;color:#E5E5E5;">' + (scanData.estimated_value ? '$' + Number(scanData.estimated_value).toLocaleString() : 'N/A') + '</div>';
+      h += '<div style="font-size:9px;color:#888;letter-spacing:1px;margin-top:2px;">EST. VALUE</div></div>';
+      h += '<div style="background:rgba(0,0,0,0.3);border-radius:10px;padding:12px;text-align:center;">';
+      h += '<div style="font-size:18px;font-weight:700;color:#E5E5E5;">' + (scanData.listings ? scanData.listings.length : 0) + '</div>';
+      h += '<div style="font-size:9px;color:#888;letter-spacing:1px;margin-top:2px;">LISTINGS</div></div></div>';
+
+      // Sub-grades
+      h += '<div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px;margin-bottom:14px;">';
+      var subGrades = [
+        { label: 'Centering', data: gradeData.centering },
+        { label: 'Corners', data: gradeData.corners },
+        { label: 'Edges', data: gradeData.edges },
+        { label: 'Surface', data: gradeData.surface }
+      ];
+      subGrades.forEach(function(sg) {
+        var val = sg.data && sg.data.grade ? sg.data.grade : (sg.data && sg.data.score ? sg.data.score : '-');
+        h += '<div style="background:rgba(0,0,0,0.2);border-radius:8px;padding:8px;text-align:center;">';
+        h += '<div style="font-size:14px;font-weight:700;color:#E5E5E5;">' + (typeof val === 'number' ? val.toFixed(1) : val) + '</div>';
+        h += '<div style="font-size:9px;color:#555;margin-top:2px;">' + sg.label + '</div></div>';
+      });
+      h += '</div>';
+    } else if (gradeData.error) {
+      h += '<div style="font-size:12px;color:#888;margin-bottom:10px;">Grade: ' + gradeData.error + '</div>';
+    }
+
+    // Add to portfolio button
+    h += '<div style="display:flex;gap:8px;">';
+    h += '<button data-testid="cc-add-portfolio" onclick="ccAddToPortfolio(\'' + (scanData.card_name || '').replace(/'/g, "\\'") + '\',\'' + (scanData.card_set || '').replace(/'/g, "\\'") + '\',' + (gradeData.overall_grade || 0) + ',' + (scanData.estimated_value || 0) + ')" style="flex:1;background:rgba(245,158,11,0.15);border:1px solid rgba(245,158,11,0.3);color:#F59E0B;padding:10px;border-radius:10px;font-size:12px;font-weight:700;cursor:pointer;">Add to Portfolio</button>';
+    h += '<button data-testid="cc-scan-again" onclick="document.getElementById(\'cc-scan-input\').click()" style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.08);color:#888;padding:10px 16px;border-radius:10px;font-size:12px;font-weight:700;cursor:pointer;">Scan Another</button>';
+    h += '</div></div>';
+
+    // Listings
+    if (scanData.listings && scanData.listings.length > 0) {
+      h += '<div style="font-size:13px;font-weight:700;color:#E5E5E5;margin-bottom:8px;">Recent Listings</div>';
+      scanData.listings.forEach(function(l) {
+        h += '<div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:10px;padding:10px;margin-bottom:6px;display:flex;align-items:center;justify-content:space-between;">';
+        h += '<div style="font-size:12px;color:#E5E5E5;">' + (l.title || l.source || 'Listing') + '</div>';
+        h += '<div style="font-size:13px;font-weight:700;color:#F59E0B;">' + (l.price ? '$' + Number(l.price).toLocaleString() : '-') + '</div>';
+        h += '</div>';
+      });
+    }
+
+    results.innerHTML = h;
+  } catch (e) {
+    results.innerHTML = '<div style="background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);border-radius:12px;padding:16px;color:#f87171;font-size:12px;">Scan failed: ' + e.message + '. Check your internet connection and try again.</div>';
+  }
+}
+
+function ccAddToPortfolio(name, set, grade, value) {
+  fetch(API + '/api/cards/collection/add', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ card_name: name, card_set: set, grade_estimate: grade, estimated_value: value })
+  }).then(function() {
+    var btn = document.querySelector('[data-testid="cc-add-portfolio"]');
+    if (btn) { btn.textContent = 'Added!'; btn.style.background = 'rgba(34,197,94,0.15)'; btn.style.color = '#22c55e'; btn.style.borderColor = 'rgba(34,197,94,0.3)'; btn.disabled = true; }
+  }).catch(function() {});
+}
+
 // ─── END COOKIN CARDS ─────────────────────────────────────────────────────────
 
 // ─── GHL BRIDGE v1.0 ──────────────────────────────────────────────────────────

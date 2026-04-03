@@ -36,6 +36,8 @@ function renderBusinessCenter() {
     { id: 'domains', label: 'Domains', icon: '🌐' },
     { id: 'resume', label: 'Resume', icon: '📄' },
     { id: 'signature', label: 'Signatures', icon: '✉️' },
+    { id: 'bizplan', label: 'Business Plan', icon: '📋' },
+    { id: 'patent', label: 'IP / Patent', icon: '🔬' },
     { id: 'meetings', label: 'Meetings', icon: '📝' },
     { id: 'analytics', label: 'Analytics', icon: '📈' },
   ];
@@ -62,6 +64,9 @@ function bcSwitchTab(tab) {
   renderBusinessCenter();
 }
 
+/* Allow external callers like command palette to set tab */
+window.bcSetTab = function(tab) { bcSwitchTab(tab); };
+
 function bcRenderTab(tab) {
   switch(tab) {
     case 'overview': return bcOverview();
@@ -69,6 +74,8 @@ function bcRenderTab(tab) {
     case 'domains': return bcDomains();
     case 'resume': return bcResumeBuilder();
     case 'signature': return bcEmailSignature();
+    case 'bizplan': return bcBusinessPlanAI();
+    case 'patent': return bcPatentSearch();
     case 'meetings': return bcMeetingNotes();
     case 'analytics': return bcAnalytics();
     default: return bcOverview();
@@ -126,19 +133,27 @@ function _bcStatCard(icon, value, label) {
    ══════════════════════════════════════════════════════════════════════════════ */
 function bcFormation() {
   var step = bcState.formationStep;
+  var totalSteps = 10;
+  var stepLabels = ['Business Type', 'Name Check', 'Entity Advisor', 'Package', 'Review', 'Submit', 'EIN Filing', 'Domain & DNS', 'SSL & Email', 'Compliance'];
   var html = '';
-  html += '<div style="margin-bottom:16px;display:flex;gap:8px;align-items:center;">';
-  for (var i = 0; i < 4; i++) {
+  html += '<div style="margin-bottom:8px;display:flex;gap:3px;align-items:center;">';
+  for (var i = 0; i < totalSteps; i++) {
     var active = i === step, done = i < step;
     html += '<div style="flex:1;height:4px;border-radius:2px;background:' + (done ? 'var(--accent-gold,#D4A843)' : active ? 'var(--accent-gold,#D4A843)' : 'var(--surface-elevated,#333)') + ';opacity:' + (active ? '1' : done ? '0.7' : '0.3') + ';"></div>';
   }
   html += '</div>';
-  html += '<div style="font-size:11px;color:var(--text-muted);margin-bottom:16px;">Step ' + (step + 1) + ' of 4</div>';
+  html += '<div style="font-size:11px;color:var(--text-muted);margin-bottom:16px;">Step ' + (step + 1) + ' of ' + totalSteps + ' — ' + (stepLabels[step] || '') + '</div>';
 
   if (step === 0) html += bcFormationStep0();
-  else if (step === 1) html += bcFormationStep1();
-  else if (step === 2) html += bcFormationStep2();
-  else if (step === 3) html += bcFormationStep3();
+  else if (step === 1) html += bcFormationStep1_NameCheck();
+  else if (step === 2) html += bcFormationStep2_EntityAdvisor();
+  else if (step === 3) html += bcFormationStep1();
+  else if (step === 4) html += bcFormationStep2();
+  else if (step === 5) html += bcFormationStep3();
+  else if (step === 6) html += bcFormationStep6_EIN();
+  else if (step === 7) html += bcFormationStep7_Domain();
+  else if (step === 8) html += bcFormationStep8_SSL();
+  else if (step === 9) html += bcFormationStep9_Compliance();
   return html;
 }
 
@@ -187,11 +202,129 @@ function bcFormationStep0() {
        + 'onchange="bcState.formationData.businessName=this.value;" '
        + 'style="width:100%;padding:12px;border-radius:10px;border:1px solid var(--border-color,#333);background:var(--surface-raised,#1a1a1a);color:var(--text-primary);font-size:14px;margin-bottom:24px;box-sizing:border-box;">';
 
-  html += '<button onclick="bcFetchPackages();" '
+  html += '<button onclick="bcGoToStep(1);" '
        + 'style="width:100%;padding:14px;border-radius:10px;border:none;background:var(--accent-gold,#D4A843);color:#000;font-weight:700;font-size:14px;cursor:pointer;"'
        + ((!bcState.formationData.entityType || !bcState.formationData.state) ? ' disabled' : '') + '>'
-       + 'View Packages & Pricing</button>';
+       + 'Next: Check Name Availability</button>';
   return html;
+}
+
+/* Navigation helper */
+function bcGoToStep(step) { bcState.formationStep = step; renderBusinessCenter(); }
+
+/* Step 1: Name Check */
+function bcFormationStep1_NameCheck() {
+  var fd = bcState.formationData;
+  var h = '';
+  h += '<h2 style="font-size:18px;font-weight:700;margin-bottom:4px;color:var(--text-primary);">Check Name Availability</h2>';
+  h += '<p style="color:var(--text-muted);font-size:13px;margin-bottom:20px;">Simultaneously check business name across state records, domains, trademarks, and social media.</p>';
+
+  h += '<div style="background:var(--surface-raised,#141414);border:1px solid var(--border-subtle,#222);border-radius:12px;padding:16px;margin-bottom:16px;">';
+  h += '<div style="font-size:14px;font-weight:700;color:var(--text-primary);margin-bottom:8px;">' + (fd.businessName || 'Your Business') + '</div>';
+  h += '<div style="font-size:12px;color:var(--text-muted);margin-bottom:12px;">' + (fd.entityType || 'LLC') + ' in ' + (fd.state || 'CA') + '</div>';
+  h += '<div id="bcNameCheckResults" style="color:var(--text-muted);font-size:12px;">Click below to run a comprehensive name check.</div>';
+  h += '</div>';
+
+  h += '<button data-testid="bc-name-check-btn" onclick="bcRunNameCheck()" style="width:100%;padding:12px;border-radius:10px;border:none;background:linear-gradient(135deg,rgba(212,168,67,0.8),rgba(212,168,67,1));color:#000;font-weight:700;font-size:13px;cursor:pointer;margin-bottom:10px;">Run Name Check</button>';
+  h += '<div style="display:flex;gap:8px;">';
+  h += '<button onclick="bcGoToStep(0)" style="flex:1;padding:10px;border-radius:10px;border:1px solid var(--border-color,#333);background:transparent;color:var(--text-secondary);font-size:12px;cursor:pointer;">Back</button>';
+  h += '<button onclick="bcGoToStep(2)" style="flex:1;padding:10px;border-radius:10px;border:none;background:var(--accent-gold,#D4A843);color:#000;font-weight:700;font-size:12px;cursor:pointer;">Next: Entity Advisor</button>';
+  h += '</div>';
+  return h;
+}
+
+async function bcRunNameCheck() {
+  var fd = bcState.formationData;
+  var el = document.getElementById('bcNameCheckResults');
+  if (!el) return;
+  el.innerHTML = '<div style="color:#F59E0B;padding:12px;">Checking name availability...</div>';
+  try {
+    var resp = await fetch(API + '/api/launchpad/name-check', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ business_name: fd.businessName || 'My Business', state: fd.state || 'CA' })
+    });
+    var data = await resp.json();
+    var h = '';
+    // State availability
+    h += '<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border-subtle,#222);">';
+    h += '<div style="width:8px;height:8px;border-radius:50%;background:' + (data.state_available ? '#22c55e' : '#ef4444') + ';"></div>';
+    h += '<div style="font-size:12px;color:var(--text-primary);">State (' + (fd.state || 'CA') + '): ' + (data.state_available ? 'Available' : 'Conflict Found') + '</div></div>';
+    // Domains
+    if (data.domains && data.domains.length) {
+      data.domains.forEach(function(d) {
+        h += '<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border-subtle,#222);">';
+        h += '<div style="width:8px;height:8px;border-radius:50%;background:' + (d.available ? '#22c55e' : d.available === null ? '#F59E0B' : '#ef4444') + ';"></div>';
+        h += '<div style="font-size:12px;color:var(--text-primary);">' + d.name + '</div>';
+        if (d.price) h += '<div style="margin-left:auto;font-size:11px;color:#F59E0B;font-weight:700;">$' + d.price.toFixed(2) + '</div>';
+        h += '</div>';
+      });
+    }
+    // Trademark
+    if (data.trademark_conflicts && data.trademark_conflicts.length) {
+      h += '<div style="margin-top:8px;font-size:11px;font-weight:700;color:#ef4444;">Trademark Conflicts (' + data.trademark_conflicts.length + ')</div>';
+      data.trademark_conflicts.forEach(function(tc) {
+        h += '<div style="font-size:11px;color:var(--text-muted);padding:2px 0;">• ' + tc.title + '</div>';
+      });
+    } else {
+      h += '<div style="display:flex;align-items:center;gap:8px;padding:6px 0;"><div style="width:8px;height:8px;border-radius:50%;background:#22c55e;"></div><div style="font-size:12px;color:var(--text-primary);">No trademark conflicts found</div></div>';
+    }
+    bcState.formationData.nameCheckData = data;
+    el.innerHTML = h;
+  } catch(e) {
+    el.innerHTML = '<div style="color:#f87171;font-size:12px;">Name check failed: ' + e.message + '</div>';
+  }
+}
+
+/* Step 2: Entity Advisor AI */
+function bcFormationStep2_EntityAdvisor() {
+  var fd = bcState.formationData;
+  var h = '';
+  h += '<h2 style="font-size:18px;font-weight:700;margin-bottom:4px;color:var(--text-primary);">Entity Advisor AI</h2>';
+  h += '<p style="color:var(--text-muted);font-size:13px;margin-bottom:20px;">Get AI-powered recommendations for your optimal business structure.</p>';
+
+  h += '<div style="background:var(--surface-raised,#141414);border:1px solid var(--border-subtle,#222);border-radius:12px;padding:16px;margin-bottom:16px;">';
+  h += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">';
+  h += '<div><label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:4px;">Cofounders</label>';
+  h += '<select data-testid="bc-advisor-cofounders" onchange="bcState.formationData.cofounders=this.value" style="width:100%;padding:8px;border-radius:8px;border:1px solid var(--border-subtle,#333);background:var(--surface-primary,#0d0d0d);color:var(--text-primary);font-size:12px;box-sizing:border-box;">';
+  h += '<option value="1">Solo Founder</option><option value="2">2 Cofounders</option><option value="3+">3+ Cofounders</option></select></div>';
+  h += '<div><label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:4px;">Funding Plans</label>';
+  h += '<select data-testid="bc-advisor-funding" onchange="bcState.formationData.funding=this.value" style="width:100%;padding:8px;border-radius:8px;border:1px solid var(--border-subtle,#333);background:var(--surface-primary,#0d0d0d);color:var(--text-primary);font-size:12px;box-sizing:border-box;">';
+  h += '<option value="bootstrapped">Bootstrapped</option><option value="angel">Angel/Seed</option><option value="vc">Venture Capital</option></select></div>';
+  h += '</div>';
+  h += '<button data-testid="bc-advisor-run" onclick="bcRunEntityAdvisor()" style="width:100%;padding:12px;border-radius:10px;border:none;background:linear-gradient(135deg,#8b5cf6,#6d28d9);color:#fff;font-weight:700;font-size:13px;cursor:pointer;">Get AI Recommendation</button>';
+  h += '<div id="bcAdvisorResults"></div></div>';
+
+  h += '<div style="display:flex;gap:8px;">';
+  h += '<button onclick="bcGoToStep(1)" style="flex:1;padding:10px;border-radius:10px;border:1px solid var(--border-color,#333);background:transparent;color:var(--text-secondary);font-size:12px;cursor:pointer;">Back</button>';
+  h += '<button onclick="bcFetchPackages()" style="flex:1;padding:10px;border-radius:10px;border:none;background:var(--accent-gold,#D4A843);color:#000;font-weight:700;font-size:12px;cursor:pointer;">Next: Select Package</button>';
+  h += '</div>';
+  return h;
+}
+
+async function bcRunEntityAdvisor() {
+  var el = document.getElementById('bcAdvisorResults');
+  if (!el) return;
+  el.innerHTML = '<div style="color:#8b5cf6;padding:12px;font-size:12px;">Analyzing your business structure...</div>';
+  try {
+    var fd = bcState.formationData;
+    var resp = await fetch(API + '/api/launchpad/entity-advisor', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ cofounders: fd.cofounders || 1, funding_plans: fd.funding || 'bootstrapped', liability_needs: 'standard', tax_preference: 'minimize taxes' })
+    });
+    var data = await resp.json();
+    var h = '<div style="margin-top:12px;padding:14px;background:rgba(139,92,246,0.08);border:1px solid rgba(139,92,246,0.2);border-radius:10px;">';
+    h += '<div style="font-weight:700;color:#8b5cf6;font-size:14px;margin-bottom:6px;">Recommended: ' + (data.recommended_entity || 'LLC') + ' in ' + (data.state || 'Wyoming') + '</div>';
+    h += '<div style="font-size:12px;color:var(--text-secondary);line-height:1.6;margin-bottom:8px;">' + (data.rationale || '') + '</div>';
+    if (data.tax_implications) h += '<div style="font-size:11px;color:var(--text-muted);line-height:1.5;"><strong>Tax:</strong> ' + data.tax_implications + '</div>';
+    if (data.next_steps && data.next_steps.length) {
+      h += '<div style="margin-top:8px;font-size:11px;font-weight:700;color:var(--text-primary);">Next Steps:</div>';
+      data.next_steps.forEach(function(s) { h += '<div style="font-size:11px;color:var(--text-muted);padding:2px 0;">• ' + s + '</div>'; });
+    }
+    h += '</div>';
+    el.innerHTML = h;
+  } catch(e) {
+    el.innerHTML = '<div style="color:#f87171;font-size:12px;padding:8px;">Advisor error: ' + e.message + '</div>';
+  }
 }
 
 /* Fetch packages from CorpNet */
@@ -217,15 +350,15 @@ async function bcFetchPackages() {
       bcState.formationData.packages = productPackages;
       bcState.formationData.apiLive = data.api_live;
       bcState.formationData.stateFee = data.state_fee || 0;
-      bcState.formationStep = 1;
+      bcState.formationStep = 3;
     } else {
       bcState.formationData.packages = [];
-      bcState.formationStep = 1;
+      bcState.formationStep = 3;
     }
   } catch(e) {
     console.error('CorpNet fetch error:', e);
     bcState.formationData.packages = [];
-    bcState.formationStep = 1;
+    bcState.formationStep = 3;
   }
   renderBusinessCenter();
 }
@@ -241,7 +374,7 @@ function bcFormationStep1() {
 
   if (pkgs.length === 0) {
     html += '<div style="padding:24px;text-align:center;color:var(--text-muted);background:var(--surface-raised,#1a1a1a);border-radius:12px;">No packages available for this combination. Try a different state or entity type.</div>';
-    html += '<button onclick="bcState.formationStep=0;renderBusinessCenter();" style="margin-top:16px;padding:12px 24px;border-radius:10px;border:1px solid var(--border-color,#333);background:transparent;color:var(--text-primary);cursor:pointer;">Back</button>';
+    html += '<button onclick="bcGoToStep(2);renderBusinessCenter();" style="margin-top:16px;padding:12px 24px;border-radius:10px;border:1px solid var(--border-color,#333);background:transparent;color:var(--text-primary);cursor:pointer;">Back</button>';
     return html;
   }
 
@@ -317,8 +450,8 @@ function bcFormationStep1() {
   }
 
   html += '<div style="display:flex;gap:10px;">';
-  html += '<button onclick="bcState.formationStep=0;renderBusinessCenter();" style="flex:1;padding:14px;border-radius:10px;border:1px solid var(--border-color,#333);background:transparent;color:var(--text-primary);cursor:pointer;font-weight:600;">Back</button>';
-  html += '<button onclick="bcState.formationStep=2;renderBusinessCenter();" '
+  html += '<button onclick="bcGoToStep(2);renderBusinessCenter();" style="flex:1;padding:14px;border-radius:10px;border:1px solid var(--border-color,#333);background:transparent;color:var(--text-primary);cursor:pointer;font-weight:600;">Back</button>';
+  html += '<button onclick="bcState.formationStep=4;renderBusinessCenter();" '
        + 'style="flex:2;padding:14px;border-radius:10px;border:none;background:var(--accent-gold,#D4A843);color:#000;font-weight:700;cursor:pointer;"'
        + (fd.selectedPkg === null || fd.selectedPkg === undefined ? ' disabled' : '') + '>Continue to Details</button>';
   html += '</div>';
@@ -350,7 +483,7 @@ function bcFormationStep2() {
   });
 
   html += '<div style="display:flex;gap:10px;margin-top:8px;">';
-  html += '<button onclick="bcState.formationStep=1;renderBusinessCenter();" style="flex:1;padding:14px;border-radius:10px;border:1px solid var(--border-color,#333);background:transparent;color:var(--text-primary);cursor:pointer;font-weight:600;">Back</button>';
+  html += '<button onclick="bcGoToStep(3);renderBusinessCenter();" style="flex:1;padding:14px;border-radius:10px;border:1px solid var(--border-color,#333);background:transparent;color:var(--text-primary);cursor:pointer;font-weight:600;">Back</button>';
   html += '<button onclick="bcSubmitFormation();" style="flex:2;padding:14px;border-radius:10px;border:none;background:var(--accent-gold,#D4A843);color:#000;font-weight:700;cursor:pointer;">Review & Submit</button>';
   html += '</div>';
   return html;
@@ -373,8 +506,11 @@ function bcFormationStep3() {
 
   html += '<p style="font-size:12px;color:var(--text-muted);">Track your order status in the Business Center. CorpNet will handle all filings with the state and federal agencies.</p>';
 
+  html += '<div style="display:flex;gap:8px;margin-top:12px;">';
+  html += '<button onclick="bcGoToStep(6)" style="flex:2;padding:14px;border-radius:10px;border:none;background:var(--accent-gold,#D4A843);color:#000;font-weight:700;cursor:pointer;">Continue: EIN Filing</button>';
   html += '<button onclick="bcState.formationStep=0;bcState.formationData.packages=[];bcState.formationData.selectedPkg=null;renderBusinessCenter();" '
-       + 'style="width:100%;padding:14px;border-radius:10px;border:none;background:var(--accent-gold,#D4A843);color:#000;font-weight:700;cursor:pointer;margin-top:12px;">Start Another Formation</button>';
+       + 'style="flex:1;padding:14px;border-radius:10px;border:1px solid var(--border-color,#333);background:transparent;color:var(--text-secondary);cursor:pointer;font-size:12px;">Start Over</button>';
+  html += '</div>';
   return html;
 }
 
@@ -426,10 +562,10 @@ async function bcSubmitFormation() {
       })
     });
 
-    bcState.formationStep = 3;
+    bcState.formationStep = 5;
   } catch(e) {
     console.error('Formation submit error:', e);
-    bcState.formationStep = 3;
+    bcState.formationStep = 5;
   }
   renderBusinessCenter();
 }
@@ -922,6 +1058,238 @@ function bcCheckAPIs() {
 }
 
 /* Export all Business Center data */
+/* ══════════════════════════════════════════════════════════════════════════════
+   FORMATION STEPS 6-9 (Post-Formation)
+   ══════════════════════════════════════════════════════════════════════════════ */
+
+/* Step 6: EIN Filing */
+function bcFormationStep6_EIN() {
+  var fd = bcState.formationData;
+  var h = '';
+  h += '<h2 style="font-size:18px;font-weight:700;margin-bottom:4px;color:var(--text-primary);">EIN Application</h2>';
+  h += '<p style="color:var(--text-muted);font-size:13px;margin-bottom:20px;">Apply for your Employer Identification Number (EIN) from the IRS.</p>';
+  h += '<div style="background:var(--surface-raised,#141414);border:1px solid var(--border-subtle,#222);border-radius:12px;padding:16px;margin-bottom:16px;">';
+  h += '<div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;">';
+  h += '<div style="width:32px;height:32px;border-radius:8px;background:rgba(34,197,94,0.1);display:flex;align-items:center;justify-content:center;color:#22c55e;font-weight:900;">IRS</div>';
+  h += '<div><div style="font-weight:700;color:var(--text-primary);">Federal EIN</div><div style="font-size:11px;color:var(--text-muted);">Required for bank accounts, hiring, and tax filing</div></div></div>';
+  h += '<div style="font-size:12px;color:var(--text-secondary);line-height:1.7;margin-bottom:12px;">Your EIN is like a Social Security Number for your business. It\'s required to open a business bank account, hire employees, and file taxes.</div>';
+  h += '<div id="bcEINResults" style="margin-bottom:12px;"></div>';
+  h += '<button data-testid="bc-ein-apply" onclick="bcApplyEIN()" style="width:100%;padding:12px;border-radius:10px;border:none;background:linear-gradient(135deg,#22c55e,#16a34a);color:#fff;font-weight:700;font-size:13px;cursor:pointer;">Apply for EIN</button>';
+  h += '</div>';
+  h += '<div style="display:flex;gap:8px;">';
+  h += '<button onclick="bcGoToStep(5)" style="flex:1;padding:10px;border-radius:10px;border:1px solid var(--border-color,#333);background:transparent;color:var(--text-secondary);font-size:12px;cursor:pointer;">Back</button>';
+  h += '<button onclick="bcGoToStep(7)" style="flex:1;padding:10px;border-radius:10px;border:none;background:var(--accent-gold,#D4A843);color:#000;font-weight:700;font-size:12px;cursor:pointer;">Next: Domain & DNS</button>';
+  h += '</div>';
+  return h;
+}
+
+async function bcApplyEIN() {
+  var el = document.getElementById('bcEINResults');
+  if (!el) return;
+  el.innerHTML = '<div style="color:#22c55e;font-size:12px;padding:8px;">Submitting EIN application...</div>';
+  try {
+    var resp = await fetch(API + '/api/launchpad/entity/ein', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ formation_order_id: bcState.formationData.orderId || 'pending' })
+    });
+    var data = await resp.json();
+    el.innerHTML = '<div style="background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.2);border-radius:10px;padding:12px;">' +
+      '<div style="font-weight:700;color:#22c55e;font-size:13px;">EIN Application ' + (data.ein_status || 'Submitted') + '</div>' +
+      '<div style="font-size:11px;color:var(--text-muted);margin-top:4px;">' + (data.estimated_date || 'Processing time: 2-4 weeks') + '</div></div>';
+  } catch(e) {
+    el.innerHTML = '<div style="color:#f87171;font-size:12px;">Error: ' + e.message + '</div>';
+  }
+}
+
+/* Step 7: Domain & DNS */
+function bcFormationStep7_Domain() {
+  var fd = bcState.formationData;
+  var slug = (fd.businessName || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  var h = '';
+  h += '<h2 style="font-size:18px;font-weight:700;margin-bottom:4px;color:var(--text-primary);">Domain & DNS Setup</h2>';
+  h += '<p style="color:var(--text-muted);font-size:13px;margin-bottom:20px;">Secure your business domain and configure DNS records.</p>';
+
+  h += '<div style="background:var(--surface-raised,#141414);border:1px solid var(--border-subtle,#222);border-radius:12px;padding:16px;margin-bottom:16px;">';
+  h += '<label style="font-size:12px;font-weight:600;color:var(--text-secondary);display:block;margin-bottom:6px;">Preferred Domain</label>';
+  h += '<div style="display:flex;gap:8px;margin-bottom:12px;">';
+  h += '<input data-testid="bc-domain-input" id="bcDomainInput" value="' + slug + '.com" style="flex:1;padding:10px;border-radius:8px;border:1px solid var(--border-subtle,#333);background:var(--surface-primary,#0d0d0d);color:var(--text-primary);font-size:13px;box-sizing:border-box;">';
+  h += '<button data-testid="bc-domain-check" onclick="bcCheckDomain()" style="padding:10px 16px;border-radius:8px;border:none;background:var(--accent-gold,#D4A843);color:#000;font-weight:700;font-size:12px;cursor:pointer;">Check</button></div>';
+  h += '<div id="bcDomainResults"></div>';
+
+  h += '<div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--border-subtle,#222);">';
+  h += '<div style="font-size:12px;font-weight:600;color:var(--text-secondary);margin-bottom:8px;">Auto-Configure DNS</div>';
+  h += '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;">';
+  h += '<button onclick="bcConfigDNS(\'vercel\')" style="padding:10px;border-radius:8px;border:1px solid var(--border-subtle,#333);background:var(--surface-primary,#0d0d0d);color:var(--text-secondary);font-size:11px;cursor:pointer;font-weight:600;">Vercel</button>';
+  h += '<button onclick="bcConfigDNS(\'render\')" style="padding:10px;border-radius:8px;border:1px solid var(--border-subtle,#333);background:var(--surface-primary,#0d0d0d);color:var(--text-secondary);font-size:11px;cursor:pointer;font-weight:600;">Render</button>';
+  h += '<button onclick="bcConfigDNS(\'cloudflare\')" style="padding:10px;border-radius:8px;border:1px solid var(--border-subtle,#333);background:var(--surface-primary,#0d0d0d);color:var(--text-secondary);font-size:11px;cursor:pointer;font-weight:600;">Cloudflare</button>';
+  h += '</div>';
+  h += '<div id="bcDNSResults" style="margin-top:8px;"></div>';
+  h += '</div></div>';
+
+  h += '<div style="display:flex;gap:8px;">';
+  h += '<button onclick="bcGoToStep(6)" style="flex:1;padding:10px;border-radius:10px;border:1px solid var(--border-color,#333);background:transparent;color:var(--text-secondary);font-size:12px;cursor:pointer;">Back</button>';
+  h += '<button onclick="bcGoToStep(8)" style="flex:1;padding:10px;border-radius:10px;border:none;background:var(--accent-gold,#D4A843);color:#000;font-weight:700;font-size:12px;cursor:pointer;">Next: SSL & Email</button>';
+  h += '</div>';
+  return h;
+}
+
+async function bcCheckDomain() {
+  var domain = document.getElementById('bcDomainInput');
+  var el = document.getElementById('bcDomainResults');
+  if (!domain || !el) return;
+  el.innerHTML = '<div style="color:#F59E0B;font-size:12px;">Checking availability...</div>';
+  try {
+    var resp = await fetch(API + '/api/launchpad/name-check', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ business_name: domain.value.replace(/\.\w+$/, ''), state: 'CA' })
+    });
+    var data = await resp.json();
+    var h = '';
+    if (data.domains) {
+      data.domains.forEach(function(d) {
+        h += '<div style="display:flex;align-items:center;gap:8px;padding:6px 0;">';
+        h += '<div style="width:8px;height:8px;border-radius:50%;background:' + (d.available ? '#22c55e' : '#ef4444') + ';"></div>';
+        h += '<span style="font-size:12px;color:var(--text-primary);">' + d.name + '</span>';
+        if (d.price) h += '<span style="margin-left:auto;font-size:11px;color:#F59E0B;font-weight:700;">$' + d.price.toFixed(2) + '</span>';
+        h += '</div>';
+      });
+    }
+    el.innerHTML = h || '<div style="color:var(--text-muted);font-size:12px;">No results</div>';
+  } catch(e) { el.innerHTML = '<div style="color:#f87171;font-size:12px;">' + e.message + '</div>'; }
+}
+
+async function bcConfigDNS(target) {
+  var domain = (document.getElementById('bcDomainInput') || {}).value || '';
+  var el = document.getElementById('bcDNSResults');
+  if (!el || !domain) return;
+  el.innerHTML = '<div style="color:#F59E0B;font-size:12px;">Configuring DNS...</div>';
+  try {
+    var resp = await fetch(API + '/api/launchpad/dns/configure', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ domain: domain, target: target })
+    });
+    var data = await resp.json();
+    var h = '<div style="margin-top:8px;">';
+    if (data.records_created) {
+      data.records_created.forEach(function(r) {
+        h += '<div style="display:flex;align-items:center;gap:6px;padding:4px 0;font-size:11px;">';
+        h += '<div style="width:6px;height:6px;border-radius:50%;background:' + (r.status === 'created' ? '#22c55e' : '#ef4444') + ';"></div>';
+        h += '<span style="color:var(--text-secondary);">' + r.record + ' — ' + r.status + '</span></div>';
+      });
+    }
+    h += '</div>';
+    el.innerHTML = h;
+  } catch(e) { el.innerHTML = '<div style="color:#f87171;font-size:12px;">' + e.message + '</div>'; }
+}
+
+/* Step 8: SSL & Email */
+function bcFormationStep8_SSL() {
+  var fd = bcState.formationData;
+  var h = '';
+  h += '<h2 style="font-size:18px;font-weight:700;margin-bottom:4px;color:var(--text-primary);">SSL & Email Setup</h2>';
+  h += '<p style="color:var(--text-muted);font-size:13px;margin-bottom:20px;">Secure your site with SSL and set up professional email.</p>';
+
+  h += '<div style="background:var(--surface-raised,#141414);border:1px solid var(--border-subtle,#222);border-radius:12px;padding:16px;margin-bottom:16px;">';
+  h += '<div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;">';
+  h += '<div style="width:32px;height:32px;border-radius:8px;background:rgba(34,197,94,0.1);display:flex;align-items:center;justify-content:center;font-size:16px;">🔒</div>';
+  h += '<div><div style="font-weight:700;color:var(--text-primary);">SSL Certificate</div>';
+  h += '<div style="font-size:11px;color:var(--text-muted);">Auto-provisioned via Let\'s Encrypt</div></div>';
+  h += '<div style="margin-left:auto;background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.3);color:#22c55e;padding:3px 10px;border-radius:20px;font-size:10px;font-weight:700;">AUTO</div></div>';
+  h += '<div style="font-size:12px;color:var(--text-secondary);line-height:1.7;">SSL certificates are automatically provisioned when your domain is pointed to your hosting provider. No action required — just ensure DNS propagation is complete (up to 48 hours).</div>';
+  h += '<div id="bcSSLResults" style="margin-top:10px;"></div>';
+  h += '<button data-testid="bc-ssl-provision" onclick="bcProvisionSSL()" style="width:100%;margin-top:12px;padding:10px;border-radius:8px;border:none;background:rgba(34,197,94,0.15);color:#22c55e;font-weight:700;font-size:12px;cursor:pointer;">Verify SSL Status</button>';
+  h += '</div>';
+
+  h += '<div style="background:var(--surface-raised,#141414);border:1px solid var(--border-subtle,#222);border-radius:12px;padding:16px;margin-bottom:16px;">';
+  h += '<div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;">';
+  h += '<div style="width:32px;height:32px;border-radius:8px;background:rgba(245,158,11,0.1);display:flex;align-items:center;justify-content:center;font-size:16px;">📧</div>';
+  h += '<div><div style="font-weight:700;color:var(--text-primary);">Professional Email</div>';
+  h += '<div style="font-size:11px;color:var(--text-muted);">Configure email@yourdomain.com</div></div></div>';
+  h += '<div style="font-size:12px;color:var(--text-secondary);line-height:1.7;">MX records for professional email have been added during DNS configuration. Configure your email provider (Google Workspace, Namecheap Email, etc.) to start receiving email at your custom domain.</div>';
+  h += '</div>';
+
+  h += '<div style="display:flex;gap:8px;">';
+  h += '<button onclick="bcGoToStep(7)" style="flex:1;padding:10px;border-radius:10px;border:1px solid var(--border-color,#333);background:transparent;color:var(--text-secondary);font-size:12px;cursor:pointer;">Back</button>';
+  h += '<button onclick="bcGoToStep(9)" style="flex:1;padding:10px;border-radius:10px;border:none;background:var(--accent-gold,#D4A843);color:#000;font-weight:700;font-size:12px;cursor:pointer;">Next: Compliance</button>';
+  h += '</div>';
+  return h;
+}
+
+async function bcProvisionSSL() {
+  var el = document.getElementById('bcSSLResults');
+  if (!el) return;
+  var domain = (document.getElementById('bcDomainInput') || {}).value || bcState.formationData.businessName + '.com';
+  el.innerHTML = '<div style="color:#22c55e;font-size:12px;">Checking SSL...</div>';
+  try {
+    var resp = await fetch(API + '/api/launchpad/ssl/provision', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ domain: domain })
+    });
+    var data = await resp.json();
+    el.innerHTML = '<div style="background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.2);border-radius:8px;padding:10px;margin-top:8px;">' +
+      '<div style="font-size:12px;color:#22c55e;font-weight:700;">' + (data.ssl_status || 'Provisioning') + '</div>' +
+      '<div style="font-size:11px;color:var(--text-muted);">Provider: ' + (data.provider || 'Let\'s Encrypt') + '</div></div>';
+  } catch(e) { el.innerHTML = '<div style="color:#f87171;font-size:12px;">' + e.message + '</div>'; }
+}
+
+/* Step 9: Compliance Calendar */
+function bcFormationStep9_Compliance() {
+  var fd = bcState.formationData;
+  var h = '';
+  h += '<h2 style="font-size:18px;font-weight:700;margin-bottom:4px;color:var(--text-primary);">Compliance Calendar</h2>';
+  h += '<p style="color:var(--text-muted);font-size:13px;margin-bottom:20px;">AI-generated compliance schedule for your ' + (fd.entityType || 'LLC') + ' in ' + (fd.state || 'your state') + '.</p>';
+
+  h += '<div style="background:var(--surface-raised,#141414);border:1px solid var(--border-subtle,#222);border-radius:12px;padding:16px;margin-bottom:16px;">';
+  h += '<div id="bcComplianceResults" style="color:var(--text-muted);font-size:12px;">Click below to generate your compliance calendar with all filing deadlines.</div>';
+  h += '<button data-testid="bc-compliance-gen" onclick="bcGenCompliance()" style="width:100%;margin-top:12px;padding:12px;border-radius:10px;border:none;background:linear-gradient(135deg,#8b5cf6,#6d28d9);color:#fff;font-weight:700;font-size:13px;cursor:pointer;">Generate Compliance Calendar</button>';
+  h += '</div>';
+
+  h += '<div style="background:rgba(34,197,94,0.05);border:1px solid rgba(34,197,94,0.15);border-radius:12px;padding:16px;margin-bottom:16px;">';
+  h += '<div style="font-weight:700;color:#22c55e;font-size:14px;margin-bottom:6px;">Formation Complete!</div>';
+  h += '<div style="font-size:12px;color:var(--text-secondary);line-height:1.7;">Your business formation journey is complete. Here\'s a summary:</div>';
+  h += '<ul style="font-size:12px;color:var(--text-secondary);line-height:2;padding-left:20px;margin-top:8px;">';
+  h += '<li>Entity: ' + (fd.entityType || 'LLC') + ' in ' + (fd.state || 'N/A') + '</li>';
+  h += '<li>Name: ' + (fd.businessName || 'N/A') + '</li>';
+  h += '<li>Formation: Submitted to CorpNet</li>';
+  h += '<li>EIN: Application submitted</li>';
+  h += '<li>Domain & DNS: Configured</li>';
+  h += '<li>SSL: Auto-provisioning</li>';
+  h += '</ul></div>';
+
+  h += '<div style="display:flex;gap:8px;">';
+  h += '<button onclick="bcGoToStep(8)" style="flex:1;padding:10px;border-radius:10px;border:1px solid var(--border-color,#333);background:transparent;color:var(--text-secondary);font-size:12px;cursor:pointer;">Back</button>';
+  h += '<button onclick="bcState.formationStep=0;bcState.formationData.packages=[];bcState.formationData.selectedPkg=null;bcSwitchTab(\'overview\')" style="flex:1;padding:10px;border-radius:10px;border:none;background:var(--accent-gold,#D4A843);color:#000;font-weight:700;font-size:12px;cursor:pointer;">Done — Back to Overview</button>';
+  h += '</div>';
+  return h;
+}
+
+async function bcGenCompliance() {
+  var el = document.getElementById('bcComplianceResults');
+  if (!el) return;
+  var fd = bcState.formationData;
+  el.innerHTML = '<div style="color:#8b5cf6;font-size:12px;padding:8px;">Generating compliance calendar...</div>';
+  try {
+    var resp = await fetch(API + '/api/launchpad/compliance/setup', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ entity_type: fd.entityType || 'LLC', state: fd.state || 'CA', formation_date: new Date().toISOString().split('T')[0] })
+    });
+    var data = await resp.json();
+    var h = '';
+    if (data.calendar_events && data.calendar_events.length) {
+      data.calendar_events.forEach(function(ev) {
+        h += '<div style="display:flex;gap:12px;padding:10px 0;border-bottom:1px solid var(--border-subtle,#222);">';
+        h += '<div style="width:40px;text-align:center;"><div style="font-size:9px;color:var(--text-muted);text-transform:uppercase;">' + (ev.frequency || 'annual') + '</div>';
+        h += '<div style="font-size:11px;font-weight:700;color:' + (ev.recurring ? '#F59E0B' : '#22c55e') + ';">' + (ev.recurring ? '⟳' : '✓') + '</div></div>';
+        h += '<div><div style="font-size:13px;font-weight:600;color:var(--text-primary);">' + (ev.title || '') + '</div>';
+        h += '<div style="font-size:11px;color:var(--text-muted);margin-top:2px;">Due: ' + (ev.due_date || 'TBD') + '</div>';
+        if (ev.description) h += '<div style="font-size:11px;color:var(--text-secondary);margin-top:4px;">' + ev.description + '</div>';
+        h += '</div></div>';
+      });
+    }
+    el.innerHTML = h || '<div style="color:var(--text-muted);">No events generated.</div>';
+  } catch(e) { el.innerHTML = '<div style="color:#f87171;font-size:12px;">' + e.message + '</div>'; }
+}
+
 function bcExportData() {
   var data = {
     exported_at: new Date().toISOString(),
@@ -936,4 +1304,205 @@ function bcExportData() {
   a.href = url; a.download = 'business-center-export-' + new Date().toISOString().split('T')[0] + '.json';
   a.click();
   URL.revokeObjectURL(url);
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   BUSINESS PLAN AI TAB
+   ══════════════════════════════════════════════════════════════════════════════ */
+
+var bcPlanState = { idea: '', target: '', stage: 'pre-revenue', sections: [], loading: false, error: '' };
+
+function bcBusinessPlanAI() {
+  var s = bcPlanState;
+  var h = '<div data-testid="bc-bizplan-tab" style="padding:4px 0;">';
+  h += '<div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;">';
+  h += '<div style="width:36px;height:36px;border-radius:10px;background:linear-gradient(135deg,rgba(212,168,67,0.2),rgba(212,168,67,0.05));display:flex;align-items:center;justify-content:center;font-size:18px;">📋</div>';
+  h += '<div><div style="font-weight:700;color:var(--text-primary);font-size:16px;">Business Plan AI</div>';
+  h += '<div style="font-size:11px;color:var(--text-muted);">Generate investor-grade business plans with market research</div></div></div>';
+
+  h += '<div style="background:var(--surface-raised,#141414);border:1px solid var(--border-subtle,#222);border-radius:12px;padding:16px;margin-bottom:16px;">';
+  h += '<label style="font-size:12px;font-weight:600;color:var(--text-secondary);display:block;margin-bottom:6px;">Business Idea / Description *</label>';
+  h += '<textarea data-testid="bc-plan-idea" rows="3" placeholder="Describe your business idea..." style="width:100%;background:var(--surface-primary,#0d0d0d);border:1px solid var(--border-subtle,#333);border-radius:8px;padding:10px;color:var(--text-primary);font-size:13px;resize:vertical;box-sizing:border-box;" onchange="bcPlanState.idea=this.value" oninput="bcPlanState.idea=this.value">' + (s.idea || '') + '</textarea>';
+  h += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px;">';
+  h += '<div><label style="font-size:12px;font-weight:600;color:var(--text-secondary);display:block;margin-bottom:6px;">Target Market</label>';
+  h += '<input data-testid="bc-plan-target" placeholder="e.g. SMBs, Enterprise" value="' + (s.target || '') + '" style="width:100%;background:var(--surface-primary,#0d0d0d);border:1px solid var(--border-subtle,#333);border-radius:8px;padding:10px;color:var(--text-primary);font-size:13px;box-sizing:border-box;" onchange="bcPlanState.target=this.value"></div>';
+  h += '<div><label style="font-size:12px;font-weight:600;color:var(--text-secondary);display:block;margin-bottom:6px;">Stage</label>';
+  h += '<select data-testid="bc-plan-stage" style="width:100%;background:var(--surface-primary,#0d0d0d);border:1px solid var(--border-subtle,#333);border-radius:8px;padding:10px;color:var(--text-primary);font-size:13px;box-sizing:border-box;" onchange="bcPlanState.stage=this.value">';
+  h += '<option value="pre-revenue"' + (s.stage === 'pre-revenue' ? ' selected' : '') + '>Pre-Revenue</option>';
+  h += '<option value="early-revenue"' + (s.stage === 'early-revenue' ? ' selected' : '') + '>Early Revenue</option>';
+  h += '<option value="growth"' + (s.stage === 'growth' ? ' selected' : '') + '>Growth Stage</option>';
+  h += '<option value="scale"' + (s.stage === 'scale' ? ' selected' : '') + '>Scale / Series B+</option>';
+  h += '</select></div></div>';
+  h += '<button data-testid="bc-plan-generate" onclick="bcGeneratePlan()" ' + (s.loading ? 'disabled' : '') + ' style="width:100%;margin-top:14px;padding:12px;border-radius:10px;border:none;cursor:pointer;font-size:13px;font-weight:700;background:var(--accent-gold,#D4A843);color:#000;">' + (s.loading ? 'Generating plan... (this takes 30-60s)' : 'Generate Business Plan') + '</button>';
+  h += '</div>';
+
+  if (s.error) {
+    h += '<div style="background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);border-radius:10px;padding:12px;margin-bottom:16px;color:#f87171;font-size:12px;">' + s.error + '</div>';
+  }
+
+  if (s.sections.length > 0) {
+    h += '<div style="margin-bottom:12px;display:flex;align-items:center;justify-content:space-between;">';
+    h += '<div style="font-weight:700;color:var(--text-primary);font-size:14px;">Generated Plan (' + s.sections.length + ' sections)</div>';
+    h += '<button onclick="bcExportPlan()" style="background:rgba(212,168,67,0.1);border:1px solid rgba(212,168,67,0.3);color:#D4A843;padding:6px 14px;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer;border:1px solid rgba(212,168,67,0.3);">Export PDF</button>';
+    h += '</div>';
+    s.sections.forEach(function(sec) {
+      var title = sec.section.replace(/_/g, ' ').replace(/\b\w/g, function(l) { return l.toUpperCase(); });
+      h += '<div style="background:var(--surface-raised,#141414);border:1px solid var(--border-subtle,#222);border-radius:12px;padding:16px;margin-bottom:10px;">';
+      h += '<div style="font-weight:700;color:var(--accent-gold,#D4A843);font-size:13px;margin-bottom:8px;">' + title + '</div>';
+      h += '<div style="font-size:12px;color:var(--text-secondary);line-height:1.7;white-space:pre-wrap;">' + (sec.content || '').replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</div>';
+      h += '</div>';
+    });
+  }
+  h += '</div>';
+  return h;
+}
+
+async function bcGeneratePlan() {
+  if (!bcPlanState.idea) { bcPlanState.error = 'Please describe your business idea.'; renderBusinessCenter(); return; }
+  bcPlanState.loading = true; bcPlanState.error = ''; bcPlanState.sections = [];
+  renderBusinessCenter();
+
+  try {
+    var response = await fetch(API + '/api/business/plan', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ idea_description: bcPlanState.idea, target_market: bcPlanState.target, stage: bcPlanState.stage })
+    });
+
+    var reader = response.body.getReader();
+    var decoder = new TextDecoder();
+    var buffer = '';
+
+    while (true) {
+      var result = await reader.read();
+      if (result.done) break;
+      buffer += decoder.decode(result.value, { stream: true });
+      var lines = buffer.split('\n');
+      buffer = lines.pop() || '';
+      for (var i = 0; i < lines.length; i++) {
+        var line = lines[i].trim();
+        if (line.startsWith('data: ')) {
+          try {
+            var evt = JSON.parse(line.slice(6));
+            if (evt.event === 'section_complete') {
+              bcPlanState.sections.push({ section: evt.section, content: evt.content });
+              renderBusinessCenter();
+            }
+          } catch(e) {}
+        }
+      }
+    }
+    bcPlanState.loading = false;
+    renderBusinessCenter();
+  } catch (e) {
+    bcPlanState.loading = false;
+    bcPlanState.error = 'Failed to generate plan: ' + e.message;
+    renderBusinessCenter();
+  }
+}
+
+function bcExportPlan() {
+  var text = 'BUSINESS PLAN\nGenerated: ' + new Date().toISOString().split('T')[0] + '\n\n';
+  bcPlanState.sections.forEach(function(sec) {
+    text += sec.section.replace(/_/g, ' ').toUpperCase() + '\n' + '='.repeat(40) + '\n' + sec.content + '\n\n';
+  });
+  var blob = new Blob([text], { type: 'text/plain' });
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a'); a.href = url; a.download = 'business-plan-' + new Date().toISOString().split('T')[0] + '.txt'; a.click();
+  URL.revokeObjectURL(url);
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   IP / PATENT INTELLIGENCE TAB
+   ══════════════════════════════════════════════════════════════════════════════ */
+
+var bcPatentState = { description: '', competitors: '', results: null, loading: false, error: '' };
+
+function bcPatentSearch() {
+  var s = bcPatentState;
+  var h = '<div data-testid="bc-patent-tab" style="padding:4px 0;">';
+  h += '<div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;">';
+  h += '<div style="width:36px;height:36px;border-radius:10px;background:linear-gradient(135deg,rgba(139,92,246,0.2),rgba(139,92,246,0.05));display:flex;align-items:center;justify-content:center;font-size:18px;">🔬</div>';
+  h += '<div><div style="font-weight:700;color:var(--text-primary);font-size:16px;">IP / Patent Intelligence</div>';
+  h += '<div style="font-size:11px;color:var(--text-muted);">Search prior art, FTO analysis, and patent landscape</div></div></div>';
+
+  h += '<div style="background:var(--surface-raised,#141414);border:1px solid var(--border-subtle,#222);border-radius:12px;padding:16px;margin-bottom:16px;">';
+  h += '<label style="font-size:12px;font-weight:600;color:var(--text-secondary);display:block;margin-bottom:6px;">Technology Description *</label>';
+  h += '<textarea data-testid="bc-patent-desc" rows="3" placeholder="Describe the technology or invention to research..." style="width:100%;background:var(--surface-primary,#0d0d0d);border:1px solid var(--border-subtle,#333);border-radius:8px;padding:10px;color:var(--text-primary);font-size:13px;resize:vertical;box-sizing:border-box;" onchange="bcPatentState.description=this.value" oninput="bcPatentState.description=this.value">' + (s.description || '') + '</textarea>';
+  h += '<label style="font-size:12px;font-weight:600;color:var(--text-secondary);display:block;margin-top:12px;margin-bottom:6px;">Competitors (comma-separated)</label>';
+  h += '<input data-testid="bc-patent-competitors" placeholder="e.g. Google, Microsoft, Apple" value="' + (s.competitors || '') + '" style="width:100%;background:var(--surface-primary,#0d0d0d);border:1px solid var(--border-subtle,#333);border-radius:8px;padding:10px;color:var(--text-primary);font-size:13px;box-sizing:border-box;" onchange="bcPatentState.competitors=this.value">';
+  h += '<button data-testid="bc-patent-search" onclick="bcRunPatentSearch()" ' + (s.loading ? 'disabled' : '') + ' style="width:100%;margin-top:14px;padding:12px;border-radius:10px;border:none;cursor:pointer;font-size:13px;font-weight:700;background:linear-gradient(135deg,#8b5cf6,#6d28d9);color:#fff;">' + (s.loading ? 'Searching patents...' : 'Search Prior Art & Patents') + '</button>';
+  h += '</div>';
+
+  if (s.error) {
+    h += '<div style="background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);border-radius:10px;padding:12px;margin-bottom:16px;color:#f87171;font-size:12px;">' + s.error + '</div>';
+  }
+
+  if (s.results) {
+    var r = s.results;
+    // FTO Analysis
+    h += '<div style="background:var(--surface-raised,#141414);border:1px solid rgba(139,92,246,0.2);border-radius:12px;padding:16px;margin-bottom:12px;">';
+    h += '<div style="font-weight:700;color:#8b5cf6;font-size:13px;margin-bottom:8px;">Freedom-to-Operate Analysis</div>';
+    h += '<div style="font-size:12px;color:var(--text-secondary);line-height:1.7;white-space:pre-wrap;">' + ((r.fto_analysis || '').replace ? r.fto_analysis.replace(/</g, '&lt;') : r.fto_analysis) + '</div>';
+    h += '</div>';
+
+    // Valuation
+    if (r.valuation_range) {
+      h += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">';
+      h += '<div style="background:var(--surface-raised,#141414);border:1px solid var(--border-subtle,#222);border-radius:12px;padding:14px;text-align:center;">';
+      h += '<div style="font-size:11px;color:var(--text-muted);margin-bottom:4px;">Low Estimate</div>';
+      h += '<div style="font-size:18px;font-weight:900;color:var(--accent-gold,#D4A843);">' + (r.valuation_range.low || 'N/A') + '</div></div>';
+      h += '<div style="background:var(--surface-raised,#141414);border:1px solid var(--border-subtle,#222);border-radius:12px;padding:14px;text-align:center;">';
+      h += '<div style="font-size:11px;color:var(--text-muted);margin-bottom:4px;">High Estimate</div>';
+      h += '<div style="font-size:18px;font-weight:900;color:var(--accent-gold,#D4A843);">' + (r.valuation_range.high || 'N/A') + '</div></div></div>';
+    }
+
+    // Prior Art
+    if (r.prior_art && r.prior_art.length > 0) {
+      h += '<div style="background:var(--surface-raised,#141414);border:1px solid var(--border-subtle,#222);border-radius:12px;padding:16px;margin-bottom:12px;">';
+      h += '<div style="font-weight:700;color:var(--text-primary);font-size:13px;margin-bottom:10px;">Prior Art (' + r.prior_art.length + ' found)</div>';
+      r.prior_art.forEach(function(pa) {
+        h += '<div style="padding:8px 0;border-bottom:1px solid var(--border-subtle,#222);">';
+        h += '<a href="' + (pa.url || '#') + '" target="_blank" style="color:#8b5cf6;font-size:12px;font-weight:600;text-decoration:none;">' + (pa.title || 'Untitled') + '</a>';
+        if (pa.relevance_score) h += ' <span style="background:rgba(139,92,246,0.15);color:#a78bfa;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:700;">' + Math.round(pa.relevance_score * 100) + '% match</span>';
+        h += '</div>';
+      });
+      h += '</div>';
+    }
+
+    // Licensing Opportunities
+    if (r.licensing_opportunities && r.licensing_opportunities.length > 0) {
+      h += '<div style="background:var(--surface-raised,#141414);border:1px solid var(--border-subtle,#222);border-radius:12px;padding:16px;">';
+      h += '<div style="font-weight:700;color:var(--text-primary);font-size:13px;margin-bottom:10px;">Licensing Opportunities</div>';
+      r.licensing_opportunities.forEach(function(lo) {
+        h += '<div style="padding:6px 0;font-size:12px;color:var(--text-secondary);">• ' + (typeof lo === 'string' ? lo : lo.name || lo.company || JSON.stringify(lo)) + '</div>';
+      });
+      h += '</div>';
+    }
+  }
+  h += '</div>';
+  return h;
+}
+
+async function bcRunPatentSearch() {
+  if (!bcPatentState.description) { bcPatentState.error = 'Please describe the technology.'; renderBusinessCenter(); return; }
+  bcPatentState.loading = true; bcPatentState.error = ''; bcPatentState.results = null;
+  renderBusinessCenter();
+
+  try {
+    var competitors = bcPatentState.competitors ? bcPatentState.competitors.split(',').map(function(c) { return c.trim(); }) : [];
+    var response = await fetch(API + '/api/business/patent-search', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ technology_description: bcPatentState.description, competitors: competitors })
+    });
+    var data = await response.json();
+    bcPatentState.results = data;
+    bcPatentState.loading = false;
+    renderBusinessCenter();
+  } catch (e) {
+    bcPatentState.loading = false;
+    bcPatentState.error = 'Patent search failed: ' + e.message;
+    renderBusinessCenter();
+  }
 }
