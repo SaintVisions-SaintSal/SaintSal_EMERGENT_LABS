@@ -12045,7 +12045,7 @@ async def career_search_jobs(
                 r = await client.post("https://api.exa.ai/search",
                     headers={"x-api-key": exa_key, "Content-Type": "application/json"},
                     json={"query": search_query, "numResults": 10, "type": "neural", "useAutoprompt": True,
-                          "includeDomains": ["linkedin.com","indeed.com","glassdoor.com","lever.co","greenhouse.io","workday.com","ziprecruiter.com","dice.com","wellfound.com"],
+                          "includeDomains": ["linkedin.com","indeed.com","glassdoor.com","lever.co","greenhouse.io","workday.com","ziprecruiter.com","dice.com","wellfound.com","monster.com","careerbuilder.com","simplyhired.com"],
                           "contents": {"text": {"maxCharacters": 500}}})
                 if r.status_code == 200:
                     data = r.json()
@@ -17252,6 +17252,8 @@ from routers.metering import router as metering_router
 
 app.include_router(verticals_router)
 app.include_router(career_router)
+from routers.career_suite import router as career_suite_router
+app.include_router(career_suite_router)
 app.include_router(business_router)
 app.include_router(creative_router)
 app.include_router(launchpad_router)
