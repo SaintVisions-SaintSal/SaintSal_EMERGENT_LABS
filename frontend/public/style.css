@@ -245,7 +245,7 @@ ul, ol { list-style: none; }
    VIEWS (shared)
    ============================================ */
 .view { display: none; flex: 1; flex-direction: column; overflow: hidden; }
-.view.active { display: flex; }
+.view.active { display: flex; overflow-y: auto; }
 .app-footer { text-align: center; font-size: var(--text-xs); color: var(--text-faint); padding: var(--space-3) var(--space-4); flex-shrink: 0; }
 .app-footer a { color: var(--text-muted); transition: color var(--duration-fast); }
 .app-footer a:hover { color: var(--accent-gold); }

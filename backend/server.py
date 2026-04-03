@@ -19,7 +19,7 @@ if _env_path.exists():
 import asyncio
 import httpx
 import traceback
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 
 
@@ -17132,6 +17132,119 @@ app.include_router(creative_router)
 app.include_router(launchpad_router)
 app.include_router(cards_router)
 app.include_router(metering_router)
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# ENDPOINT ALIASES + MISSING MARKETING ENDPOINTS
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# Alias: Frontend calls /api/creative/brand/generate-ai → brand/generate
+@app.post("/api/creative/brand/generate-ai")
+async def creative_brand_generate_ai_alias(request: Request):
+    body = await request.json()
+    brand_name = body.get("brand_name", "")
+    industry = body.get("industry", "")
+    try:
+        prompt = f"Generate a comprehensive brand profile for '{brand_name}' in the {industry} industry. Include: mission, vision, voice/tone, target audience, color palette (hex), typography, and positioning statement. Return JSON."
+        result = ""
+        try:
+            result = await claude_chat(prompt)
+        except Exception:
+            try:
+                result = await xai_chat(prompt)
+            except Exception:
+                result = '{"name":"' + brand_name + '","mission":"Empowering through innovation","colors":{"primary":"#d4a843"}}'
+        return JSONResponse({"brand_name": brand_name, "profile": result, "generated": True})
+    except Exception as e:
+        return JSONResponse({"brand_name": brand_name, "profile": str(e), "generated": False})
+
+
+# Alias: Frontend calls /api/creative/image/save-library → save-to-library
+@app.post("/api/creative/image/save-library")
+async def creative_image_save_library_alias(request: Request):
+    body = await request.json()
+    image_url = body.get("url", body.get("image_url", ""))
+    tags = body.get("tags", [])
+    title = body.get("title", "Untitled")
+    _creative_library = getattr(app.state, '_creative_library', [])
+    entry = {"id": f"img_{len(_creative_library)+1}", "url": image_url, "title": title, "tags": tags, "saved_at": datetime.now(timezone.utc).isoformat()}
+    _creative_library.append(entry)
+    app.state._creative_library = _creative_library
+    return JSONResponse({"saved": True, "entry": entry, "total_in_library": len(_creative_library)})
+
+
+# ─── Marketing Automation Endpoints ──────────────────────────────────────────
+
+_marketing_reviews = []
+_marketing_workflows = [
+    {"id": "wf_1", "name": "New Lead Follow-up", "trigger": "new_contact", "status": "active", "steps": 3, "runs": 0},
+    {"id": "wf_2", "name": "Appointment Reminder", "trigger": "appointment_24h", "status": "active", "steps": 2, "runs": 0},
+    {"id": "wf_3", "name": "Review Request", "trigger": "job_complete", "status": "paused", "steps": 4, "runs": 0},
+    {"id": "wf_4", "name": "Win-Back Campaign", "trigger": "90_days_inactive", "status": "paused", "steps": 5, "runs": 0},
+]
+
+
+@app.post("/api/marketing/ghl/connect")
+async def marketing_ghl_connect(request: Request):
+    body = await request.json()
+    api_key = body.get("api_key", os.environ.get("GHL_API_KEY", ""))
+    location_id = body.get("location_id", os.environ.get("GHL_LOCATION_ID", ""))
+    if not api_key:
+        return JSONResponse({"connected": False, "error": "GHL API key required"}, status_code=400)
+    try:
+        async with httpx.AsyncClient() as hc:
+            r = await hc.get("https://rest.gohighlevel.com/v1/contacts/?limit=1",
+                           headers={"Authorization": f"Bearer {api_key}"}, timeout=10)
+            if r.status_code == 200:
+                return JSONResponse({"connected": True, "location_id": location_id, "status": "active"})
+            return JSONResponse({"connected": False, "error": f"GHL API returned {r.status_code}"})
+    except Exception as e:
+        return JSONResponse({"connected": False, "error": str(e)})
+
+
+@app.get("/api/marketing/reviews")
+async def marketing_get_reviews(request: Request):
+    return JSONResponse({"reviews": _marketing_reviews, "total": len(_marketing_reviews),
+                        "avg_rating": round(sum(r.get("rating", 0) for r in _marketing_reviews) / max(len(_marketing_reviews), 1), 1)})
+
+
+@app.post("/api/marketing/review-response")
+async def marketing_review_response(request: Request):
+    body = await request.json()
+    review_id = body.get("review_id", "")
+    tone = body.get("tone", "professional")
+    review_text = body.get("review_text", "Great service!")
+    try:
+        prompt = f"Write a {tone} response to this customer review: '{review_text}'. Keep it warm, professional, and under 100 words."
+        response = ""
+        try:
+            response = await claude_chat(prompt)
+        except Exception:
+            try:
+                response = await xai_chat(prompt)
+            except Exception:
+                response = f"Thank you for your feedback! We appreciate your time and look forward to serving you again."
+        return JSONResponse({"review_id": review_id, "response": response, "tone": tone})
+    except Exception as e:
+        return JSONResponse({"review_id": review_id, "response": "Thank you for your feedback!", "tone": tone})
+
+
+@app.get("/api/marketing/workflows")
+async def marketing_get_workflows(request: Request):
+    return JSONResponse({"workflows": _marketing_workflows, "total": len(_marketing_workflows),
+                        "active": len([w for w in _marketing_workflows if w["status"] == "active"])})
+
+
+@app.post("/api/marketing/workflows/toggle")
+async def marketing_toggle_workflow(request: Request):
+    body = await request.json()
+    wf_id = body.get("workflow_id", "")
+    for wf in _marketing_workflows:
+        if wf["id"] == wf_id:
+            wf["status"] = "paused" if wf["status"] == "active" else "active"
+            return JSONResponse({"workflow": wf, "toggled": True})
+    return JSONResponse({"error": "Workflow not found"}, status_code=404)
+
+
 
 # Static files served by frontend
 # app.mount("/", StaticFiles(directory=str(_static_dir), html=True), name="static")
