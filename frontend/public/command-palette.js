@@ -218,5 +218,6 @@
   // ─── Expose globally ──────────────────────────────────────────
   window.openCommandPalette = openPalette;
   window.closeCommandPalette = closePalette;
+  window.toggleCommandPalette = togglePalette;
 
 })();

@@ -105,6 +105,7 @@ window._salReferralId = '';
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700;900&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="realestate.css">
     <link rel="stylesheet" href="medical.css">
+    <link rel="stylesheet" href="command-palette.css">
   <script src="https://unpkg.com/@elevenlabs/convai-widget-embed" async type="text/javascript"></script>
 </head>
 <body>
@@ -269,6 +270,10 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
           <span>100 / 100 credits</span>
           <div class="compute-bar-wrap"><div class="compute-bar-fill" style="width:100%"></div></div>
         </div>
+        <button class="topbar-action-btn" data-testid="quick-actions-btn" onclick="window.toggleCommandPalette && window.toggleCommandPalette()" title="Quick Actions (Cmd+K)" style="display:flex;align-items:center;gap:6px;padding:6px 12px;border-radius:8px;border:1px solid var(--border-subtle,#333);background:var(--surface-raised,#1a1a1a);color:var(--text-secondary);font-size:12px;cursor:pointer;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <span style="opacity:0.6;font-size:11px;">Cmd+K</span>
+        </button>
         <button class="theme-toggle" onclick="toggleTheme()" aria-label="Toggle theme" id="themeToggle">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" id="themeIcon"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
         </button>
@@ -2099,6 +2104,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
     <script src="admin-fulfillment.js"></script>
     <script src="admin-panel.js"></script>
     <script src="career-suite.js"></script>
+    <script src="command-palette.js"></script>
 
 
     <!-- Social Composer Modal -->
