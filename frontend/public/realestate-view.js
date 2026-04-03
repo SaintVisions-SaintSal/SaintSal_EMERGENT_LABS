@@ -144,240 +144,31 @@ function reSelectProperty(idx, type) {
   var p = list[idx];
   if (!p) return;
   var addr = p.formattedAddress || p.addressLine1 || p.address || '';
-  var full = addr;
-  reShowPropertyDetail(p, full);
+  var full = addr + (p.city ? ', ' + p.city : '') + (p.state ? ', ' + p.state : '');
+  reGetComps(full);
 }
 
-/* ── Full Property Detail View ─────────────────────────────────────── */
-async function reShowPropertyDetail(property, address) {
+async function reGetComps(address) {
+  // Show comps inline in search results area
   var el = document.getElementById('reSearchResults');
   if (!el) return;
   el.innerHTML = '<button class="re-back-btn" onclick="reRenderSearchResults()">&larr; Back to results</button>' +
-    '<div class="re-loading"><div class="re-spinner"></div>Loading full property data for <strong>' + escapeHtml(address) + '</strong></div>';
-
-  // Fetch full property record + valuation + rent in parallel
-  var city = property.city || '';
-  var state = property.state || '';
-  var params = new URLSearchParams();
-  params.set('address', property.addressLine1 || address.split(',')[0]);
-  if (city) params.set('city', city);
-  if (state) params.set('state', state);
+    '<div class="re-loading"><div class="re-spinner"></div>Fetching valuation for <strong>' + escapeHtml(address) + '</strong></div>';
 
   try {
-    var [detailResp, valResp, rentResp] = await Promise.all([
-      fetch(API + '/api/realestate/search?' + params.toString(), { headers: authHeaders() }),
+    var [valResp, rentResp] = await Promise.all([
       fetch(API + '/api/realestate/value?address=' + encodeURIComponent(address), { headers: authHeaders() }),
       fetch(API + '/api/realestate/rent?address=' + encodeURIComponent(address), { headers: authHeaders() })
     ]);
-    var detailData = await detailResp.json();
     var valData = await valResp.json();
     var rentData = await rentResp.json();
-
-    var fullProp = (detailData.results && detailData.results[0]) || property;
     reState.valuationData = valData.data || valData;
     reState.rentData = rentData.data || rentData;
-    reRenderPropertyDetail(fullProp, reState.valuationData, reState.rentData, valData.zillow);
+    reRenderComps(address, reState.valuationData, reState.rentData, valData.zillow);
   } catch(e) {
-    // Fallback: just show what we have from the listing
-    reRenderPropertyDetail(property, null, null, null);
+    el.innerHTML = '<button class="re-back-btn" onclick="reRenderSearchResults()">&larr; Back</button><div class="re-empty">Comparables unavailable.</div>';
   }
 }
-
-function reRenderPropertyDetail(p, valData, rentData, zillowData) {
-  var el = document.getElementById('reSearchResults');
-  if (!el) return;
-  var addr = p.formattedAddress || p.addressLine1 || '';
-
-  var html = '<button class="re-back-btn" onclick="reRenderSearchResults()">&larr; Back to results</button>';
-
-  // ── HERO HEADER ──
-  html += '<div class="re-detail-hero">';
-  html += '<div class="re-detail-addr">' + escapeHtml(addr) + '</div>';
-  html += '<div class="re-detail-meta-row">';
-  if (p.propertyType) html += '<span class="re-detail-tag">' + escapeHtml(p.propertyType) + '</span>';
-  if (p.zoning) html += '<span class="re-detail-tag">' + escapeHtml(p.zoning) + '</span>';
-  if (p.county) html += '<span class="re-detail-tag">' + escapeHtml(p.county) + ' County</span>';
-  html += '</div>';
-  html += '<div class="re-detail-actions">';
-  html += '<button class="re-btn-sm accent-green" onclick="reQuickDealFromComps()">Run Deal Analysis</button>';
-  html += '<button class="re-btn-sm outline" onclick="reSALChat(\'' + escapeAttr('Give me a full investment analysis for: ' + addr) + '\')">Ask SAL</button>';
-  html += '</div></div>';
-
-  // ── KEY STATS ──
-  html += '<div class="re-detail-stats-grid">';
-  var stats = [
-    { label: 'Price', value: p.price ? '$' + Number(p.price).toLocaleString() : (p.lastSalePrice ? '$' + Number(p.lastSalePrice).toLocaleString() + ' (last sale)' : 'N/A'), accent: true },
-    { label: 'Beds / Baths', value: (p.bedrooms || '—') + ' bd / ' + (p.bathrooms || '—') + ' ba' },
-    { label: 'Square Feet', value: p.squareFootage ? Number(p.squareFootage).toLocaleString() + ' sqft' : '—' },
-    { label: 'Lot Size', value: p.lotSize ? Number(p.lotSize).toLocaleString() + ' sqft' : '—' },
-    { label: 'Year Built', value: p.yearBuilt || '—' },
-    { label: 'Price / Sqft', value: (p.price && p.squareFootage) ? '$' + Math.round(p.price / p.squareFootage).toLocaleString() : '—' },
-  ];
-  stats.forEach(function(s) {
-    html += '<div class="re-stat-card' + (s.accent ? ' accent' : '') + '"><div class="re-stat-value">' + s.value + '</div><div class="re-stat-label">' + s.label + '</div></div>';
-  });
-  html += '</div>';
-
-  // ── VALUATION + RENTAL ESTIMATES ──
-  html += '<div class="re-val-rent-grid">';
-  html += '<div class="re-val-card">';
-  html += '<div class="re-val-card-title">Property Valuation <span class="re-src-badge">RentCast AVM</span></div>';
-  if (valData && (valData.price || valData.priceRangeLow)) {
-    var estVal = valData.price || 0;
-    html += '<div class="re-val-main-value">$' + Number(estVal).toLocaleString() + '</div>';
-    html += '<div class="re-val-range">Range: $' + Number(valData.priceRangeLow || 0).toLocaleString() + ' — $' + Number(valData.priceRangeHigh || 0).toLocaleString() + '</div>';
-    if (valData.squareFootage && estVal) html += '<div class="re-val-ppsf">$' + Math.round(estVal / valData.squareFootage).toLocaleString() + '/sqft</div>';
-    if (zillowData && zillowData.zestimate) {
-      html += '<div class="re-zillow-opinion"><span class="re-src-badge">Zillow</span> $' + Number(zillowData.zestimate).toLocaleString() + '</div>';
-    }
-  } else {
-    html += '<div class="re-val-empty">Valuation unavailable</div>';
-  }
-  html += '</div>';
-  html += '<div class="re-val-card">';
-  html += '<div class="re-val-card-title">Rental Estimate</div>';
-  if (rentData && (rentData.rent || rentData.rentRangeLow)) {
-    var estRent = rentData.rent || 0;
-    html += '<div class="re-val-main-value rent">$' + Number(estRent).toLocaleString() + '<span>/mo</span></div>';
-    html += '<div class="re-val-range">Range: $' + Number(rentData.rentRangeLow || 0).toLocaleString() + ' — $' + Number(rentData.rentRangeHigh || 0).toLocaleString() + '/mo</div>';
-    if (valData && valData.price && estRent) {
-      var ratio = (estRent / valData.price * 100).toFixed(2);
-      var passes = estRent >= valData.price * 0.01;
-      html += '<div class="re-val-rule ' + (passes ? 'pass' : 'fail') + '"><span>1% Rule</span><span>' + ratio + '%</span><span>' + (passes ? 'PASS' : 'FAIL') + '</span></div>';
-    }
-  } else {
-    html += '<div class="re-val-empty">Rental estimate unavailable</div>';
-  }
-  html += '</div>';
-  html += '</div>';
-
-  // ── LEGAL & OWNERSHIP ──
-  html += '<div class="re-section-title">Legal & Ownership</div>';
-  html += '<div class="re-detail-table">';
-  var legalRows = [
-    ['Assessor ID', p.assessorID],
-    ['Legal Description', p.legalDescription],
-    ['Subdivision', p.subdivision],
-    ['Zoning', p.zoning],
-    ['Last Sale Date', p.lastSaleDate ? new Date(p.lastSaleDate).toLocaleDateString() : null],
-    ['Last Sale Price', p.lastSalePrice ? '$' + Number(p.lastSalePrice).toLocaleString() : null],
-  ];
-  // Owner info
-  if (p.owner) {
-    if (p.owner.names && p.owner.names.length) legalRows.push(['Owner', p.owner.names.join(', ')]);
-    if (p.owner.type) legalRows.push(['Owner Type', p.owner.type]);
-    if (p.owner.mailingAddress) legalRows.push(['Mailing Address', p.owner.mailingAddress.formattedAddress || '']);
-    legalRows.push(['Owner Occupied', p.ownerOccupied === true ? 'Yes' : p.ownerOccupied === false ? 'No' : '—']);
-  }
-  legalRows.forEach(function(r) {
-    if (r[1]) {
-      html += '<div class="re-detail-row"><span class="re-detail-key">' + escapeHtml(r[0]) + '</span><span class="re-detail-val">' + escapeHtml(String(r[1])) + '</span></div>';
-    }
-  });
-  html += '</div>';
-
-  // ── PROPERTY FEATURES ──
-  if (p.features && Object.keys(p.features).length) {
-    html += '<div class="re-section-title">Property Features</div>';
-    html += '<div class="re-detail-table">';
-    Object.entries(p.features).forEach(function(e) {
-      if (e[1]) html += '<div class="re-detail-row"><span class="re-detail-key">' + escapeHtml(e[0].replace(/([A-Z])/g, ' $1').trim()) + '</span><span class="re-detail-val">' + escapeHtml(String(e[1])) + '</span></div>';
-    });
-    html += '</div>';
-  }
-
-  // ── TAX ASSESSMENTS ──
-  if (p.taxAssessments && Object.keys(p.taxAssessments).length) {
-    html += '<div class="re-section-title">Tax Assessments</div>';
-    html += '<div class="re-tax-grid">';
-    var years = Object.keys(p.taxAssessments).sort().reverse();
-    years.forEach(function(yr) {
-      var t = p.taxAssessments[yr];
-      html += '<div class="re-tax-card">';
-      html += '<div class="re-tax-year">' + yr + '</div>';
-      html += '<div class="re-tax-row"><span>Total Value</span><span>$' + Number(t.value || 0).toLocaleString() + '</span></div>';
-      html += '<div class="re-tax-row"><span>Land</span><span>$' + Number(t.land || 0).toLocaleString() + '</span></div>';
-      html += '<div class="re-tax-row"><span>Improvements</span><span>$' + Number(t.improvements || 0).toLocaleString() + '</span></div>';
-      html += '</div>';
-    });
-    html += '</div>';
-  }
-
-  // ── PROPERTY TAXES ──
-  if (p.propertyTaxes && Object.keys(p.propertyTaxes).length) {
-    html += '<div class="re-section-title">Property Taxes</div>';
-    html += '<div class="re-tax-grid">';
-    Object.keys(p.propertyTaxes).sort().reverse().forEach(function(yr) {
-      var t = p.propertyTaxes[yr];
-      html += '<div class="re-tax-card">';
-      html += '<div class="re-tax-year">' + yr + '</div>';
-      html += '<div class="re-tax-row"><span>Annual Tax</span><span>$' + Number(t.total || 0).toLocaleString() + '</span></div>';
-      html += '</div>';
-    });
-    html += '</div>';
-  }
-
-  // ── SALE HISTORY ──
-  if (p.history && Object.keys(p.history).length) {
-    html += '<div class="re-section-title">Sale History</div>';
-    html += '<div class="re-detail-table">';
-    Object.entries(p.history).sort(function(a,b){ return b[0].localeCompare(a[0]); }).forEach(function(e) {
-      var ev = e[1];
-      html += '<div class="re-detail-row"><span class="re-detail-key">' + (ev.event || 'Sale') + ' — ' + new Date(ev.date).toLocaleDateString() + '</span><span class="re-detail-val">$' + Number(ev.price || 0).toLocaleString() + '</span></div>';
-    });
-    html += '</div>';
-  }
-
-  // ── COMPARABLE SALES ──
-  var saleComps = valData && valData.comparables ? valData.comparables : [];
-  if (saleComps.length > 0) {
-    html += '<div class="re-comps-section"><div class="re-comps-section-title">Comparable Sales (' + saleComps.length + ')</div><div class="re-comps-grid">';
-    saleComps.forEach(function(c) { html += reRenderCompCard(c, 'sale'); });
-    html += '</div></div>';
-  }
-
-  // ── COMPARABLE RENTALS ──
-  var rentComps = rentData && rentData.comparables ? rentData.comparables : [];
-  if (rentComps.length > 0) {
-    html += '<div class="re-comps-section"><div class="re-comps-section-title">Comparable Rentals (' + rentComps.length + ')</div><div class="re-comps-grid">';
-    rentComps.forEach(function(c) { html += reRenderCompCard(c, 'rental'); });
-    html += '</div></div>';
-  }
-
-  // ── MAP PLACEHOLDER ──
-  if (p.latitude && p.longitude) {
-    html += '<div class="re-section-title">Location</div>';
-    html += '<div class="re-map-placeholder">Lat: ' + p.latitude + ', Lng: ' + p.longitude + ' &mdash; <a href="https://www.google.com/maps?q=' + p.latitude + ',' + p.longitude + '" target="_blank" style="color:var(--accent-gold);">Open in Google Maps</a></div>';
-  }
-
-  el.innerHTML = html;
-}
-
-
-/* reGetComps — backward-compat wrapper. Now routes to the full detail view */
-function reGetComps(address) {
-  // Find the matching property in search results by address
-  var foundProp = null;
-  var allResults = (reState.searchResults || []).concat(reState.distressedResults || []);
-  for (var i = 0; i < allResults.length; i++) {
-    var p = allResults[i];
-    var pAddr = (p.formattedAddress || p.addressLine1 || '') + (p.city ? ', ' + p.city : '') + (p.state ? ', ' + p.state : '');
-    if (pAddr === address || (p.formattedAddress || '') === address) { foundProp = p; break; }
-  }
-  if (foundProp) {
-    reShowPropertyDetail(foundProp, address);
-  } else {
-    // No match — build a minimal property object from the address and still show detail
-    var parts = address.split(',').map(function(s) { return s.trim(); });
-    reShowPropertyDetail({
-      formattedAddress: address,
-      addressLine1: parts[0] || '',
-      city: parts[1] || '',
-      state: parts[2] || ''
-    }, address);
-  }
-}
-
 
 function reRenderComps(address, valData, rentData, zillowData) {
   var el = document.getElementById('reSearchResults');

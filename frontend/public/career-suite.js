@@ -1152,317 +1152,131 @@ function csLoadBackgrounds() {
 
 
 /* ══════════════════════════════════════════════════════════════════════════════
-   COVER LETTER AI — Section 3.1
+   COVER LETTER AI
    ══════════════════════════════════════════════════════════════════════════════ */
 var clState = { resumeText: '', jobDesc: '', style: 'direct', result: null, loading: false };
-
 function csCoverLetter() {
-  var h = '';
-  h += '<div data-testid="career-cover-letter">';
-  h += '<h2 style="font-size:18px;font-weight:700;color:var(--text-primary);margin-bottom:12px;">Cover Letter AI</h2>';
-  h += '<p style="color:var(--text-muted);font-size:13px;margin-bottom:20px;">Generate a tailored cover letter from your resume + job description.</p>';
-
+  var h = '<div data-testid="career-cover-letter">';
+  h += '<h2 style="font-size:18px;font-weight:700;color:var(--text-primary);margin-bottom:8px;">Cover Letter AI</h2>';
+  h += '<p style="color:var(--text-muted);font-size:13px;margin-bottom:16px;">Generate a tailored cover letter from your resume + job description.</p>';
   if (clState.result && !clState.loading) {
-    h += '<div style="background:var(--bg-surface,#1a1a1a);border:1px solid var(--border-color,#2a2a2a);border-radius:12px;padding:20px;margin-bottom:16px;">';
-    h += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">';
-    h += '<span style="color:var(--accent-gold);font-weight:600;">Generated Cover Letter</span>';
-    h += '<span style="color:var(--text-muted);font-size:12px;">' + (clState.result.word_count || 0) + ' words | ' + (clState.result.keywords_matched?.length || 0) + ' keywords matched</span>';
-    h += '</div>';
+    h += '<div style="background:var(--surface-raised,#1a1a1a);border:1px solid var(--border-color,#2a2a2a);border-radius:12px;padding:16px;margin-bottom:12px;">';
+    h += '<div style="display:flex;justify-content:space-between;margin-bottom:8px;"><span style="color:var(--accent-gold);font-weight:600;">Generated Cover Letter</span>';
+    h += '<span style="color:var(--text-muted);font-size:12px;">' + (clState.result.word_count||0) + ' words | ' + (clState.result.keywords_matched?.length||0) + ' keywords matched</span></div>';
     h += '<div style="color:var(--text-primary);font-size:14px;line-height:1.7;white-space:pre-wrap;">' + _esc(clState.result.cover_letter) + '</div>';
-    h += '<div style="display:flex;gap:8px;margin-top:16px;">';
-    h += '<button onclick="csCopyText(clState.result.cover_letter)" data-testid="cl-copy-btn" style="padding:8px 16px;border-radius:8px;border:none;background:var(--accent-gold);color:#000;font-weight:600;font-size:12px;cursor:pointer;">Copy</button>';
-    h += '<button onclick="clState.result=null;renderCareerSuite()" style="padding:8px 16px;border-radius:8px;border:1px solid var(--border-color);background:transparent;color:var(--text-secondary);font-size:12px;cursor:pointer;">New Letter</button>';
-    h += '</div></div>';
-    h += '</div>';
+    h += '<div style="display:flex;gap:8px;margin-top:12px;">';
+    h += '<button data-testid="cl-copy-btn" onclick="navigator.clipboard.writeText(clState.result.cover_letter);csShowToast(\'Copied!\')" style="padding:8px 16px;border-radius:8px;border:none;background:var(--accent-gold);color:#000;font-weight:600;font-size:12px;cursor:pointer;">Copy</button>';
+    h += '<button onclick="clState.result=null;renderCareerSuite()" style="padding:8px 16px;border-radius:8px;border:1px solid var(--border-color);background:transparent;color:var(--text-secondary);font-size:12px;cursor:pointer;">New Letter</button></div></div></div>';
     return h;
   }
-
-  h += '<div style="display:flex;flex-direction:column;gap:16px;">';
-  h += '<div><label style="color:var(--text-secondary);font-size:12px;margin-bottom:4px;display:block;">Your Resume / Experience</label>';
-  h += '<textarea id="clResume" data-testid="cl-resume-input" rows="6" style="width:100%;padding:12px;border-radius:8px;border:1px solid var(--border-color,#2a2a2a);background:var(--bg-surface,#1a1a1a);color:var(--text-primary);font-size:13px;resize:vertical;" placeholder="Paste your resume or key experience here...">' + _esc(clState.resumeText) + '</textarea></div>';
-  h += '<div><label style="color:var(--text-secondary);font-size:12px;margin-bottom:4px;display:block;">Job Description</label>';
-  h += '<textarea id="clJobDesc" data-testid="cl-job-input" rows="6" style="width:100%;padding:12px;border-radius:8px;border:1px solid var(--border-color,#2a2a2a);background:var(--bg-surface,#1a1a1a);color:var(--text-primary);font-size:13px;resize:vertical;" placeholder="Paste the job description...">' + _esc(clState.jobDesc) + '</textarea></div>';
-
-  h += '<div><label style="color:var(--text-secondary);font-size:12px;margin-bottom:8px;display:block;">Writing Style</label>';
+  h += '<div style="display:flex;flex-direction:column;gap:12px;">';
+  h += '<textarea id="clResume" data-testid="cl-resume-input" rows="5" style="width:100%;padding:12px;border-radius:8px;border:1px solid var(--border-color,#2a2a2a);background:var(--surface-raised,#1a1a1a);color:var(--text-primary);font-size:13px;resize:vertical;" placeholder="Paste your resume or key experience...">' + _esc(clState.resumeText) + '</textarea>';
+  h += '<textarea id="clJobDesc" data-testid="cl-job-input" rows="5" style="width:100%;padding:12px;border-radius:8px;border:1px solid var(--border-color,#2a2a2a);background:var(--surface-raised,#1a1a1a);color:var(--text-primary);font-size:13px;resize:vertical;" placeholder="Paste the job description...">' + _esc(clState.jobDesc) + '</textarea>';
   h += '<div style="display:flex;gap:8px;">';
-  ['direct', 'storytelling', 'technical'].forEach(function(s) {
-    var active = clState.style === s;
-    h += '<button onclick="clState.style=\'' + s + '\';renderCareerSuite()" data-testid="cl-style-' + s + '" style="padding:8px 16px;border-radius:8px;border:1px solid ' + (active ? 'var(--accent-gold)' : 'var(--border-color)') + ';background:' + (active ? 'var(--accent-gold-dim,rgba(212,160,23,0.15))' : 'transparent') + ';color:' + (active ? 'var(--accent-gold)' : 'var(--text-secondary)') + ';font-size:12px;cursor:pointer;text-transform:capitalize;">' + s + '</button>';
+  ['direct','storytelling','technical'].forEach(function(s){
+    var a = clState.style===s;
+    h += '<button onclick="clState.style=\'' + s + '\';renderCareerSuite()" style="padding:7px 14px;border-radius:8px;border:1px solid '+(a?'var(--accent-gold)':'var(--border-color)')+';background:'+(a?'rgba(212,160,67,0.15)':'transparent')+';color:'+(a?'var(--accent-gold)':'var(--text-secondary)')+';font-size:12px;cursor:pointer;text-transform:capitalize;">'+s+'</button>';
   });
-  h += '</div></div>';
-
-  if (clState.loading) {
-    h += csLoadingSpinner('Crafting your cover letter...');
-  } else {
-    h += '<button onclick="csGenerateCoverLetter()" data-testid="cl-generate-btn" style="padding:12px 24px;border-radius:10px;border:none;background:var(--accent-gold);color:#000;font-weight:700;font-size:14px;cursor:pointer;width:100%;transition:all 0.2s;">Generate Cover Letter</button>';
-  }
-  h += '</div></div>';
-  return h;
+  h += '</div>';
+  h += clState.loading ? csLoadingSpinner('Crafting your cover letter...') : '<button data-testid="cl-generate-btn" onclick="csGenerateCoverLetter()" style="padding:12px 24px;border-radius:10px;border:none;background:var(--accent-gold);color:#000;font-weight:700;font-size:14px;cursor:pointer;width:100%;">Generate Cover Letter</button>';
+  h += '</div></div>'; return h;
 }
-
 function csGenerateCoverLetter() {
-  var resume = document.getElementById('clResume');
-  var jobDesc = document.getElementById('clJobDesc');
-  if (!resume || !jobDesc || !resume.value.trim() || !jobDesc.value.trim()) {
-    csShowToast('Please fill in both resume and job description'); return;
-  }
-  clState.resumeText = resume.value;
-  clState.jobDesc = jobDesc.value;
-  clState.loading = true;
-  renderCareerSuite();
-
-  fetch((window.API || '') + '/api/career/cover-letter', {
-    method: 'POST', headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({ resume_text: clState.resumeText, job_description: clState.jobDesc, style: clState.style })
-  }).then(function(r) { return r.json(); }).then(function(data) {
-    clState.result = data;
-    clState.loading = false;
-    renderCareerSuite();
-  }).catch(function(e) { clState.loading = false; csShowToast('Error: ' + e.message); renderCareerSuite(); });
+  var r = document.getElementById('clResume'), j = document.getElementById('clJobDesc');
+  if (!r||!j||!r.value.trim()||!j.value.trim()) { csShowToast('Fill in both fields'); return; }
+  clState.resumeText=r.value; clState.jobDesc=j.value; clState.loading=true; renderCareerSuite();
+  fetch((window.API||'')+'/api/career/cover-letter',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({resume_text:clState.resumeText,job_description:clState.jobDesc,style:clState.style})}).then(function(r){return r.json()}).then(function(d){clState.result=d;clState.loading=false;renderCareerSuite()}).catch(function(e){clState.loading=false;csShowToast('Error: '+e.message);renderCareerSuite()});
 }
-
 
 /* ══════════════════════════════════════════════════════════════════════════════
-   LINKEDIN OPTIMIZER — Section 3.2
+   LINKEDIN OPTIMIZER
    ══════════════════════════════════════════════════════════════════════════════ */
 var liState = { profileText: '', result: null, loading: false };
-
 function csLinkedInOptimizer() {
-  var h = '';
-  h += '<div data-testid="career-linkedin-optimizer">';
-  h += '<h2 style="font-size:18px;font-weight:700;color:var(--text-primary);margin-bottom:12px;">LinkedIn Optimizer</h2>';
-  h += '<p style="color:var(--text-muted);font-size:13px;margin-bottom:20px;">AI-powered LinkedIn profile rewrite for maximum visibility.</p>';
-
+  var h = '<div data-testid="career-linkedin-optimizer">';
+  h += '<h2 style="font-size:18px;font-weight:700;color:var(--text-primary);margin-bottom:8px;">LinkedIn Optimizer</h2>';
   if (liState.result && !liState.loading) {
     var r = liState.result;
-    h += '<div style="display:flex;gap:12px;margin-bottom:16px;">';
-    h += '<div style="flex:1;background:var(--accent-red-dim,rgba(239,68,68,0.1));border-radius:10px;padding:16px;text-align:center;">';
-    h += '<div style="font-size:28px;font-weight:800;color:var(--accent-red,#ef4444);">' + (r.score_before || 45) + '</div>';
-    h += '<div style="font-size:11px;color:var(--text-muted);">Before</div></div>';
-    h += '<div style="flex:1;background:var(--accent-green-dim,rgba(34,197,94,0.1));border-radius:10px;padding:16px;text-align:center;">';
-    h += '<div style="font-size:28px;font-weight:800;color:var(--accent-green,#22c55e);">' + (r.score_after || 85) + '</div>';
-    h += '<div style="font-size:11px;color:var(--text-muted);">After</div></div></div>';
-
-    h += '<div style="background:var(--bg-surface);border:1px solid var(--border-color);border-radius:12px;padding:16px;margin-bottom:12px;">';
-    h += '<div style="color:var(--accent-gold);font-weight:600;font-size:13px;margin-bottom:8px;">Optimized Headline</div>';
-    h += '<div style="color:var(--text-primary);font-size:14px;">' + _esc(r.headline || '') + '</div></div>';
-
-    h += '<div style="background:var(--bg-surface);border:1px solid var(--border-color);border-radius:12px;padding:16px;margin-bottom:12px;">';
-    h += '<div style="color:var(--accent-gold);font-weight:600;font-size:13px;margin-bottom:8px;">Optimized Summary</div>';
-    h += '<div style="color:var(--text-primary);font-size:13px;line-height:1.7;white-space:pre-wrap;">' + _esc(r.summary || '') + '</div></div>';
-
-    if (r.skills_to_add && r.skills_to_add.length) {
-      h += '<div style="background:var(--bg-surface);border:1px solid var(--border-color);border-radius:12px;padding:16px;margin-bottom:12px;">';
-      h += '<div style="color:var(--accent-gold);font-weight:600;font-size:13px;margin-bottom:8px;">Skills to Add</div>';
-      h += '<div style="display:flex;flex-wrap:wrap;gap:6px;">';
-      r.skills_to_add.forEach(function(s) {
-        h += '<span style="padding:4px 10px;border-radius:6px;background:var(--accent-blue-dim);color:var(--accent-blue);font-size:12px;">' + _esc(s) + '</span>';
-      });
-      h += '</div></div>';
-    }
-
-    h += '<button onclick="liState.result=null;renderCareerSuite()" style="padding:10px 20px;border-radius:8px;border:1px solid var(--border-color);background:transparent;color:var(--text-secondary);font-size:13px;cursor:pointer;">Optimize Another Profile</button>';
-    h += '</div>';
+    h += '<div style="display:flex;gap:12px;margin-bottom:14px;">';
+    h += '<div style="flex:1;background:rgba(239,68,68,0.08);border-radius:10px;padding:14px;text-align:center;"><div style="font-size:26px;font-weight:800;color:#ef4444;">'+(r.score_before||45)+'</div><div style="font-size:11px;color:var(--text-muted);">Before</div></div>';
+    h += '<div style="flex:1;background:rgba(34,197,94,0.08);border-radius:10px;padding:14px;text-align:center;"><div style="font-size:26px;font-weight:800;color:#22c55e;">'+(r.score_after||85)+'</div><div style="font-size:11px;color:var(--text-muted);">After</div></div></div>';
+    h += '<div style="background:var(--surface-raised);border:1px solid var(--border-color);border-radius:12px;padding:14px;margin-bottom:12px;"><div style="color:var(--accent-gold);font-weight:600;font-size:13px;margin-bottom:6px;">Optimized Headline</div><div style="color:var(--text-primary);font-size:14px;">'+_esc(r.headline||'')+'</div></div>';
+    h += '<div style="background:var(--surface-raised);border:1px solid var(--border-color);border-radius:12px;padding:14px;margin-bottom:12px;"><div style="color:var(--accent-gold);font-weight:600;font-size:13px;margin-bottom:6px;">Optimized Summary</div><div style="color:var(--text-primary);font-size:13px;line-height:1.7;white-space:pre-wrap;">'+_esc(r.summary||'')+'</div></div>';
+    if (r.skills_to_add&&r.skills_to_add.length){h+='<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px;">';r.skills_to_add.forEach(function(s){h+='<span style="padding:4px 10px;border-radius:6px;background:rgba(96,165,250,0.1);color:#60a5fa;font-size:12px;">'+_esc(s)+'</span>'});h+='</div>';}
+    h += '<button onclick="liState.result=null;renderCareerSuite()" style="padding:8px 16px;border-radius:8px;border:1px solid var(--border-color);background:transparent;color:var(--text-secondary);font-size:12px;cursor:pointer;">Optimize Another</button></div>';
     return h;
   }
-
-  h += '<textarea id="liProfile" data-testid="li-profile-input" rows="10" style="width:100%;padding:12px;border-radius:8px;border:1px solid var(--border-color);background:var(--bg-surface);color:var(--text-primary);font-size:13px;resize:vertical;margin-bottom:16px;" placeholder="Paste your current LinkedIn profile text here (headline, summary, experience)...">' + _esc(liState.profileText) + '</textarea>';
-
-  if (liState.loading) {
-    h += csLoadingSpinner('Analyzing your profile...');
-  } else {
-    h += '<button onclick="csOptimizeLinkedIn()" data-testid="li-optimize-btn" style="padding:12px 24px;border-radius:10px;border:none;background:var(--accent-gold);color:#000;font-weight:700;font-size:14px;cursor:pointer;width:100%;">Optimize My Profile</button>';
-  }
-  h += '</div>';
-  return h;
+  h += '<textarea id="liProfile" data-testid="li-profile-input" rows="8" style="width:100%;padding:12px;border-radius:8px;border:1px solid var(--border-color);background:var(--surface-raised);color:var(--text-primary);font-size:13px;resize:vertical;margin-bottom:12px;" placeholder="Paste your current LinkedIn profile text here...">'+_esc(liState.profileText)+'</textarea>';
+  h += liState.loading ? csLoadingSpinner('Analyzing your profile...') : '<button data-testid="li-optimize-btn" onclick="csOptimizeLinkedIn()" style="padding:12px 24px;border-radius:10px;border:none;background:var(--accent-gold);color:#000;font-weight:700;font-size:14px;cursor:pointer;width:100%;">Optimize My Profile</button>';
+  h += '</div>'; return h;
 }
-
 function csOptimizeLinkedIn() {
   var el = document.getElementById('liProfile');
-  if (!el || !el.value.trim()) { csShowToast('Please paste your LinkedIn profile'); return; }
-  liState.profileText = el.value;
-  liState.loading = true;
-  renderCareerSuite();
-
-  fetch((window.API || '') + '/api/career/linkedin-optimize', {
-    method: 'POST', headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({ current_profile_text: liState.profileText })
-  }).then(function(r) { return r.json(); }).then(function(data) {
-    liState.result = data;
-    liState.loading = false;
-    renderCareerSuite();
-  }).catch(function(e) { liState.loading = false; csShowToast('Error: ' + e.message); renderCareerSuite(); });
+  if (!el||!el.value.trim()){csShowToast('Paste your LinkedIn profile');return;}
+  liState.profileText=el.value;liState.loading=true;renderCareerSuite();
+  fetch((window.API||'')+'/api/career/linkedin-optimize',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({current_profile_text:liState.profileText})}).then(function(r){return r.json()}).then(function(d){liState.result=d;liState.loading=false;renderCareerSuite()}).catch(function(e){liState.loading=false;csShowToast('Error: '+e.message);renderCareerSuite()});
 }
 
-
 /* ══════════════════════════════════════════════════════════════════════════════
-   SALARY NEGOTIATOR — Section 3.3
+   SALARY NEGOTIATOR
    ══════════════════════════════════════════════════════════════════════════════ */
 var snState = { role: '', location: '', years: 5, offer: '', result: null, loading: false };
-
 function csSalaryNegotiator() {
-  var h = '';
-  h += '<div data-testid="career-salary-negotiator">';
-  h += '<h2 style="font-size:18px;font-weight:700;color:var(--text-primary);margin-bottom:12px;">Salary Negotiator</h2>';
-  h += '<p style="color:var(--text-muted);font-size:13px;margin-bottom:20px;">Get market data + word-for-word negotiation scripts.</p>';
-
+  var h = '<div data-testid="career-salary-negotiator">';
+  h += '<h2 style="font-size:18px;font-weight:700;color:var(--text-primary);margin-bottom:8px;">Salary Negotiator</h2>';
+  h += '<p style="color:var(--text-muted);font-size:13px;margin-bottom:14px;">Get market data + word-for-word negotiation scripts.</p>';
   if (snState.result && !snState.loading) {
-    var r = snState.result;
-    var range = r.market_range || {};
-
-    h += '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:16px;">';
-    ['low', 'median', 'high', 'top_10_pct'].forEach(function(k) {
-      var label = k === 'top_10_pct' ? 'Top 10%' : k.charAt(0).toUpperCase() + k.slice(1);
-      var val = range[k] || 'N/A';
-      if (typeof val === 'number') val = '$' + val.toLocaleString();
-      h += '<div style="background:var(--bg-surface);border-radius:10px;padding:12px;text-align:center;border:1px solid var(--border-color);">';
-      h += '<div style="font-size:16px;font-weight:700;color:var(--accent-gold);">' + val + '</div>';
-      h += '<div style="font-size:11px;color:var(--text-muted);">' + label + '</div></div>';
-    });
+    var r = snState.result, range = r.market_range||{};
+    h += '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:14px;">';
+    [['low','Low'],['median','Median'],['high','High'],['top_10_pct','Top 10%']].forEach(function(k){var v=range[k[0]]||'N/A';if(typeof v==='number')v='$'+v.toLocaleString();h+='<div style="background:var(--surface-raised);border-radius:10px;padding:12px;text-align:center;border:1px solid var(--border-color);"><div style="font-size:15px;font-weight:700;color:var(--accent-gold);">'+v+'</div><div style="font-size:11px;color:var(--text-muted);">'+k[1]+'</div></div>'});
     h += '</div>';
-
-    h += '<div style="background:var(--bg-surface);border:1px solid var(--border-color);border-radius:12px;padding:16px;margin-bottom:12px;">';
-    h += '<div style="color:var(--accent-gold);font-weight:600;font-size:13px;margin-bottom:8px;">Counter-Offer Script</div>';
-    h += '<div style="color:var(--text-primary);font-size:13px;line-height:1.7;white-space:pre-wrap;">' + _esc(r.counter_offer_script || '') + '</div></div>';
-
-    if (r.negotiation_tips && r.negotiation_tips.length) {
-      h += '<div style="background:var(--bg-surface);border:1px solid var(--border-color);border-radius:12px;padding:16px;margin-bottom:12px;">';
-      h += '<div style="color:var(--accent-gold);font-weight:600;font-size:13px;margin-bottom:8px;">Tips</div>';
-      r.negotiation_tips.forEach(function(t) { h += '<div style="color:var(--text-secondary);font-size:13px;margin-bottom:6px;">• ' + _esc(t) + '</div>'; });
-      h += '</div>';
-    }
-
-    h += '<button onclick="snState.result=null;renderCareerSuite()" style="padding:10px 20px;border-radius:8px;border:1px solid var(--border-color);background:transparent;color:var(--text-secondary);font-size:13px;cursor:pointer;">New Analysis</button>';
-    h += '</div>';
+    h += '<div style="background:var(--surface-raised);border:1px solid var(--border-color);border-radius:12px;padding:14px;margin-bottom:12px;"><div style="color:var(--accent-gold);font-weight:600;font-size:13px;margin-bottom:6px;">Counter-Offer Script</div><div style="color:var(--text-primary);font-size:13px;line-height:1.7;white-space:pre-wrap;">'+_esc(r.counter_offer_script||'')+'</div></div>';
+    h += '<button onclick="snState.result=null;renderCareerSuite()" style="padding:8px 16px;border-radius:8px;border:1px solid var(--border-color);background:transparent;color:var(--text-secondary);font-size:12px;cursor:pointer;">New Analysis</button></div>';
     return h;
   }
-
-  h += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">';
-  h += '<div><label style="color:var(--text-secondary);font-size:12px;display:block;margin-bottom:4px;">Role / Title</label>';
-  h += '<input id="snRole" data-testid="sn-role-input" type="text" value="' + _esc(snState.role) + '" style="width:100%;padding:10px;border-radius:8px;border:1px solid var(--border-color);background:var(--bg-surface);color:var(--text-primary);font-size:13px;" placeholder="Senior Software Engineer"></div>';
-  h += '<div><label style="color:var(--text-secondary);font-size:12px;display:block;margin-bottom:4px;">Location</label>';
-  h += '<input id="snLocation" data-testid="sn-location-input" type="text" value="' + _esc(snState.location) + '" style="width:100%;padding:10px;border-radius:8px;border:1px solid var(--border-color);background:var(--bg-surface);color:var(--text-primary);font-size:13px;" placeholder="San Francisco, CA"></div></div>';
-
-  h += '<div style="display:grid;grid-template-columns:1fr 2fr;gap:12px;margin-bottom:12px;">';
-  h += '<div><label style="color:var(--text-secondary);font-size:12px;display:block;margin-bottom:4px;">Years Experience</label>';
-  h += '<input id="snYears" type="number" value="' + snState.years + '" style="width:100%;padding:10px;border-radius:8px;border:1px solid var(--border-color);background:var(--bg-surface);color:var(--text-primary);font-size:13px;"></div>';
-  h += '<div><label style="color:var(--text-secondary);font-size:12px;display:block;margin-bottom:4px;">Current Offer (optional)</label>';
-  h += '<input id="snOffer" data-testid="sn-offer-input" type="text" value="' + _esc(snState.offer) + '" style="width:100%;padding:10px;border-radius:8px;border:1px solid var(--border-color);background:var(--bg-surface);color:var(--text-primary);font-size:13px;" placeholder="$180,000 base + $50k RSU"></div></div>';
-
-  if (snState.loading) {
-    h += csLoadingSpinner('Researching market data...');
-  } else {
-    h += '<button onclick="csNegotiateSalary()" data-testid="sn-negotiate-btn" style="padding:12px 24px;border-radius:10px;border:none;background:var(--accent-gold);color:#000;font-weight:700;font-size:14px;cursor:pointer;width:100%;">Get Negotiation Strategy</button>';
-  }
-  h += '</div>';
-  return h;
+  h += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">';
+  h += '<input id="snRole" data-testid="sn-role-input" type="text" value="'+_esc(snState.role)+'" style="padding:10px;border-radius:8px;border:1px solid var(--border-color);background:var(--surface-raised);color:var(--text-primary);font-size:13px;" placeholder="Role (e.g. Senior Engineer)">';
+  h += '<input id="snLocation" type="text" value="'+_esc(snState.location)+'" style="padding:10px;border-radius:8px;border:1px solid var(--border-color);background:var(--surface-raised);color:var(--text-primary);font-size:13px;" placeholder="Location (e.g. SF, CA)"></div>';
+  h += '<div style="display:grid;grid-template-columns:80px 1fr;gap:10px;margin-bottom:12px;">';
+  h += '<input id="snYears" type="number" value="'+snState.years+'" style="padding:10px;border-radius:8px;border:1px solid var(--border-color);background:var(--surface-raised);color:var(--text-primary);font-size:13px;" placeholder="Yrs">';
+  h += '<input id="snOffer" type="text" value="'+_esc(snState.offer)+'" style="padding:10px;border-radius:8px;border:1px solid var(--border-color);background:var(--surface-raised);color:var(--text-primary);font-size:13px;" placeholder="Current offer (optional)"></div>';
+  h += snState.loading ? csLoadingSpinner('Researching market data...') : '<button data-testid="sn-negotiate-btn" onclick="csNegotiateSalary()" style="padding:12px 24px;border-radius:10px;border:none;background:var(--accent-gold);color:#000;font-weight:700;font-size:14px;cursor:pointer;width:100%;">Get Negotiation Strategy</button>';
+  h += '</div>'; return h;
 }
-
 function csNegotiateSalary() {
-  var role = document.getElementById('snRole');
-  if (!role || !role.value.trim()) { csShowToast('Please enter a role'); return; }
-  snState.role = role.value;
-  snState.location = (document.getElementById('snLocation') || {}).value || '';
-  snState.years = parseInt((document.getElementById('snYears') || {}).value) || 5;
-  snState.offer = (document.getElementById('snOffer') || {}).value || '';
-  snState.loading = true;
-  renderCareerSuite();
-
-  fetch((window.API || '') + '/api/career/salary-negotiate', {
-    method: 'POST', headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({ role: snState.role, location: snState.location, experience_years: snState.years, offer_details: snState.offer })
-  }).then(function(r) { return r.json(); }).then(function(data) {
-    snState.result = data;
-    snState.loading = false;
-    renderCareerSuite();
-  }).catch(function(e) { snState.loading = false; csShowToast('Error: ' + e.message); renderCareerSuite(); });
+  var r=document.getElementById('snRole');if(!r||!r.value.trim()){csShowToast('Enter a role');return;}
+  snState.role=r.value;snState.location=(document.getElementById('snLocation')||{}).value||'';snState.years=parseInt((document.getElementById('snYears')||{}).value)||5;snState.offer=(document.getElementById('snOffer')||{}).value||'';snState.loading=true;renderCareerSuite();
+  fetch((window.API||'')+'/api/career/salary-negotiate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({role:snState.role,location:snState.location,experience_years:snState.years,offer_details:snState.offer})}).then(function(r){return r.json()}).then(function(d){snState.result=d;snState.loading=false;renderCareerSuite()}).catch(function(e){snState.loading=false;csShowToast('Error: '+e.message);renderCareerSuite()});
 }
-
 
 /* ══════════════════════════════════════════════════════════════════════════════
-   NETWORK MAPPER — Section 3.4
+   NETWORK MAPPER
    ══════════════════════════════════════════════════════════════════════════════ */
 var nmState = { company: '', linkedin: '', result: null, loading: false };
-
 function csNetworkMapper() {
-  var h = '';
-  h += '<div data-testid="career-network-mapper">';
-  h += '<h2 style="font-size:18px;font-weight:700;color:var(--text-primary);margin-bottom:12px;">Network Mapper</h2>';
-  h += '<p style="color:var(--text-muted);font-size:13px;margin-bottom:20px;">Find key connections at your target company + get intro templates.</p>';
-
+  var h = '<div data-testid="career-network-mapper">';
+  h += '<h2 style="font-size:18px;font-weight:700;color:var(--text-primary);margin-bottom:8px;">Network Mapper</h2>';
+  h += '<p style="color:var(--text-muted);font-size:13px;margin-bottom:14px;">Find key connections at your target company + get intro templates.</p>';
   if (nmState.result && !nmState.loading) {
     var r = nmState.result;
-
-    if (r.connections && r.connections.length) {
-      h += '<div style="margin-bottom:16px;">';
-      h += '<div style="color:var(--accent-gold);font-weight:600;font-size:13px;margin-bottom:8px;">Key Connections</div>';
-      r.connections.forEach(function(c) {
-        h += '<div style="background:var(--bg-surface);border:1px solid var(--border-color);border-radius:10px;padding:12px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;">';
-        h += '<div><div style="color:var(--text-primary);font-weight:600;font-size:13px;">' + _esc(c.name || '') + '</div>';
-        h += '<div style="color:var(--text-muted);font-size:12px;">' + _esc(c.title || '') + '</div></div>';
-        if (c.linkedin_url) h += '<a href="' + c.linkedin_url + '" target="_blank" style="color:var(--accent-blue);font-size:12px;">LinkedIn</a>';
-        h += '</div>';
-      });
-      h += '</div>';
-    }
-
-    if (r.intro_templates && r.intro_templates.length) {
-      h += '<div style="margin-bottom:16px;">';
-      h += '<div style="color:var(--accent-gold);font-weight:600;font-size:13px;margin-bottom:8px;">Intro Templates</div>';
-      r.intro_templates.forEach(function(t, i) {
-        h += '<div style="background:var(--bg-surface);border:1px solid var(--border-color);border-radius:10px;padding:12px;margin-bottom:8px;">';
-        h += '<div style="color:var(--text-primary);font-size:13px;line-height:1.6;white-space:pre-wrap;">' + _esc(typeof t === 'string' ? t : JSON.stringify(t)) + '</div></div>';
-      });
-      h += '</div>';
-    }
-
-    if (r.approach_strategy) {
-      h += '<div style="background:var(--bg-surface);border:1px solid var(--accent-gold-dim);border-radius:10px;padding:16px;margin-bottom:16px;">';
-      h += '<div style="color:var(--accent-gold);font-weight:600;font-size:13px;margin-bottom:8px;">Approach Strategy</div>';
-      h += '<div style="color:var(--text-primary);font-size:13px;line-height:1.6;">' + _esc(r.approach_strategy) + '</div></div>';
-    }
-
-    h += '<button onclick="nmState.result=null;renderCareerSuite()" style="padding:10px 20px;border-radius:8px;border:1px solid var(--border-color);background:transparent;color:var(--text-secondary);font-size:13px;cursor:pointer;">New Search</button>';
-    h += '</div>';
+    if (r.connections&&r.connections.length){h+='<div style="margin-bottom:14px;"><div style="color:var(--accent-gold);font-weight:600;font-size:13px;margin-bottom:8px;">Key Connections</div>';r.connections.forEach(function(c){h+='<div style="background:var(--surface-raised);border:1px solid var(--border-color);border-radius:10px;padding:10px;margin-bottom:6px;display:flex;justify-content:space-between;align-items:center;"><div><div style="color:var(--text-primary);font-weight:600;font-size:13px;">'+_esc(c.name||'')+'</div><div style="color:var(--text-muted);font-size:12px;">'+_esc(c.title||'')+'</div></div>'+(c.linkedin_url?'<a href="'+c.linkedin_url+'" target="_blank" style="color:#60a5fa;font-size:12px;">LinkedIn</a>':'')+'</div>'});h+='</div>';}
+    if (r.approach_strategy){h+='<div style="background:var(--surface-raised);border:1px solid rgba(212,160,67,0.2);border-radius:10px;padding:14px;margin-bottom:12px;"><div style="color:var(--accent-gold);font-weight:600;font-size:13px;margin-bottom:6px;">Strategy</div><div style="color:var(--text-primary);font-size:13px;line-height:1.6;">'+_esc(r.approach_strategy)+'</div></div>';}
+    h += '<button onclick="nmState.result=null;renderCareerSuite()" style="padding:8px 16px;border-radius:8px;border:1px solid var(--border-color);background:transparent;color:var(--text-secondary);font-size:12px;cursor:pointer;">New Search</button></div>';
     return h;
   }
-
-  h += '<div style="display:flex;flex-direction:column;gap:12px;margin-bottom:16px;">';
-  h += '<div><label style="color:var(--text-secondary);font-size:12px;display:block;margin-bottom:4px;">Target Company</label>';
-  h += '<input id="nmCompany" data-testid="nm-company-input" type="text" value="' + _esc(nmState.company) + '" style="width:100%;padding:10px;border-radius:8px;border:1px solid var(--border-color);background:var(--bg-surface);color:var(--text-primary);font-size:13px;" placeholder="Google, Apple, Meta..."></div>';
-  h += '<div><label style="color:var(--text-secondary);font-size:12px;display:block;margin-bottom:4px;">Your LinkedIn URL (optional)</label>';
-  h += '<input id="nmLinkedIn" type="text" value="' + _esc(nmState.linkedin) + '" style="width:100%;padding:10px;border-radius:8px;border:1px solid var(--border-color);background:var(--bg-surface);color:var(--text-primary);font-size:13px;" placeholder="https://linkedin.com/in/your-profile"></div></div>';
-
-  if (nmState.loading) {
-    h += csLoadingSpinner('Mapping network connections...');
-  } else {
-    h += '<button onclick="csMapNetwork()" data-testid="nm-map-btn" style="padding:12px 24px;border-radius:10px;border:none;background:var(--accent-gold);color:#000;font-weight:700;font-size:14px;cursor:pointer;width:100%;">Map Network</button>';
-  }
-  h += '</div>';
-  return h;
+  h += '<input id="nmCompany" data-testid="nm-company-input" type="text" value="'+_esc(nmState.company)+'" style="width:100%;padding:10px;border-radius:8px;border:1px solid var(--border-color);background:var(--surface-raised);color:var(--text-primary);font-size:13px;margin-bottom:10px;" placeholder="Target Company (Google, Apple, Meta...)">';
+  h += '<input id="nmLinkedIn" type="text" value="'+_esc(nmState.linkedin)+'" style="width:100%;padding:10px;border-radius:8px;border:1px solid var(--border-color);background:var(--surface-raised);color:var(--text-primary);font-size:13px;margin-bottom:12px;" placeholder="Your LinkedIn URL (optional)">';
+  h += nmState.loading ? csLoadingSpinner('Mapping network...') : '<button data-testid="nm-map-btn" onclick="csMapNetwork()" style="padding:12px 24px;border-radius:10px;border:none;background:var(--accent-gold);color:#000;font-weight:700;font-size:14px;cursor:pointer;width:100%;">Map Network</button>';
+  h += '</div>'; return h;
 }
-
 function csMapNetwork() {
-  var company = document.getElementById('nmCompany');
-  if (!company || !company.value.trim()) { csShowToast('Please enter a target company'); return; }
-  nmState.company = company.value;
-  nmState.linkedin = (document.getElementById('nmLinkedIn') || {}).value || '';
-  nmState.loading = true;
-  renderCareerSuite();
-
-  fetch((window.API || '') + '/api/career/network-map', {
-    method: 'POST', headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({ target_company: nmState.company, user_linkedin_url: nmState.linkedin })
-  }).then(function(r) { return r.json(); }).then(function(data) {
-    nmState.result = data;
-    nmState.loading = false;
-    renderCareerSuite();
-  }).catch(function(e) { nmState.loading = false; csShowToast('Error: ' + e.message); renderCareerSuite(); });
+  var c=document.getElementById('nmCompany');if(!c||!c.value.trim()){csShowToast('Enter a company');return;}
+  nmState.company=c.value;nmState.linkedin=(document.getElementById('nmLinkedIn')||{}).value||'';nmState.loading=true;renderCareerSuite();
+  fetch((window.API||'')+'/api/career/network-map',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({target_company:nmState.company,user_linkedin_url:nmState.linkedin})}).then(function(r){return r.json()}).then(function(d){nmState.result=d;nmState.loading=false;renderCareerSuite()}).catch(function(e){nmState.loading=false;csShowToast('Error: '+e.message);renderCareerSuite()});
 }
 
-function csCopyText(text) {
-  navigator.clipboard.writeText(text).then(function() { csShowToast('Copied to clipboard!'); }).catch(function() { csShowToast('Copy failed'); });
-}
+/* ── Tab setter for Cmd+K palette ── */
+window.csSetTab = function(tab) { csState.activeTab = tab; renderCareerSuite(); };
 
 
 /* ══════════════════════════════════════════════════════════════════════════════

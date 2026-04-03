@@ -93,7 +93,6 @@ window._salReferralId = '';
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" crossorigin="anonymous">
 <link rel="stylesheet" href="style.css">
 <link rel="stylesheet" href="connectors-domains.css">
 <link rel="stylesheet" href="admin-fulfillment.css">
@@ -106,7 +105,6 @@ window._salReferralId = '';
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700;900&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="realestate.css">
     <link rel="stylesheet" href="medical.css">
-    <link rel="stylesheet" href="command-palette.css">
   <script src="https://unpkg.com/@elevenlabs/convai-widget-embed" async type="text/javascript"></script>
 </head>
 <body>
@@ -267,11 +265,6 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
         <div class="topbar-breadcrumb" id="topbarBreadcrumb"><span>Search</span></div>
       </div>
       <div class="topbar-right">
-        <button class="cmd-k-trigger" onclick="openCommandPalette()" data-testid="cmd-k-trigger" title="Quick Actions (Ctrl+K)">
-          <i class="fa-solid fa-bolt" style="font-size:11px;margin-right:6px;"></i>
-          <span>Quick Actions</span>
-          <kbd style="margin-left:8px;display:inline-flex;align-items:center;gap:2px;padding:1px 5px;border-radius:4px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.08);font-size:10px;color:#666;font-family:'SF Mono',Monaco,Consolas,monospace;line-height:1.4;">&#8984;K</kbd>
-        </button>
         <div class="compute-meter">
           <span>100 / 100 credits</span>
           <div class="compute-bar-wrap"><div class="compute-bar-fill" style="width:100%"></div></div>
@@ -1384,10 +1377,14 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
           <div style="font-family:var(--bv2-mono);font-size:11px;color:var(--bv2-text-muted);">Your build will preview here</div>
         </div>
 
-        <!-- Loading state -->
+        <!-- Loading state + Trivia -->
         <div id="bv2PreviewLoading" class="bv2-preview__loading" style="display:none;">
-          <div class="bv2-preview__spinner"></div>
-          <div class="bv2-preview__loading-text" id="bv2PreviewLoadingText">Rendering preview...</div>
+          <div style="text-align:center;padding:40px 0;">
+            <div class="bv2-preview__spinner"></div>
+            <div class="bv2-preview__loading-text" id="bv2PreviewLoadingText" style="color:var(--bv2-gold, #F59E0B);font-size:18px;font-weight:700;margin-top:20px;">Building your app...</div>
+            <div style="color:var(--bv2-text-muted, #666);font-size:13px;margin-top:4px;" id="bv2BuildModelLabel">Powered by SaintSal Elite</div>
+          </div>
+          <div id="bv2BuilderTrivia" style="transition:opacity 0.3s ease,transform 0.3s ease;"></div>
         </div>
 
         <!-- Preview iframe -->
@@ -2102,7 +2099,6 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
     <script src="admin-fulfillment.js"></script>
     <script src="admin-panel.js"></script>
     <script src="career-suite.js"></script>
-    <script src="command-palette.js"></script>
 
 
     <!-- Social Composer Modal -->
