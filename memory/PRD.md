@@ -1,70 +1,88 @@
-# SaintSal Labs Platform v2 — PRD
+# SaintSal Labs Platform — Product Requirements Document
 
 ## Original Problem Statement
-Full vertical buildout of SaintSal Labs Platform. Existing vanilla JS + FastAPI + Supabase platform. 8 intelligence verticals, Builder v2, Career & Business suites, Creative Studio, Launch Pad, CookinCards, Pricing/Metering.
+Build a full-stack business intelligence platform (SaintSal Labs) with 8 intelligence verticals, Builder v2, Career & Business suites, Creative Studio, Launch Pad, CookinCards, and Pricing/Metering. Retain dark/gold aesthetic. FastAPI backend + Vanilla JS frontend.
 
 ## Architecture
-- **Backend**: Python/FastAPI (server.py + /routers/) on port 8001
-- **Frontend**: Vanilla JS + HTML served via CRA public/
-- **Database**: Supabase PostgreSQL + in-memory (keys pending)
+- **Backend**: FastAPI on port 8001 (`/app/backend/server.py` + `/app/backend/routers/`)
+- **Frontend**: Vanilla JS served from `/app/frontend/public/` via React wrapper
+- **Database**: Supabase (connected), MongoDB (available)
+- **Payments**: Stripe (live keys configured)
+- **CRM**: Go High Level (connected)
+- **APIs**: RentCast, PropertyAPI, Ximilar, GoDaddy, CorpNet, Alpaca
 
-## Implemented Features
+## What's Been Implemented
 
-### Metering & Tier Gating (Production Spec v3)
-- 5 tiers: Free $0 / Starter $27 / Pro $97 / Teams $297 / Enterprise $497 with real Stripe IDs
-- 4 compute levels: SAL Mini $0.05 / Pro $0.25 / Max $0.75 / Max Fast $1.00
-- 65+ integrations catalog, 42 action cost types, hard/soft cap logic
-- Real-time sidebar widget + topbar credits + tier gate modal
+### Phase 0: Infrastructure (DONE)
+- Cloned repo, adapted to Emergent environment
+- Modular backend routers for all verticals
+- Supabase + GHL + Stripe keys configured and connected
 
-### Social/Creative Studio (8 tabs — FIXED Apr 3)
-- Content Engine (platform select, AI generation, templates)
-- Image Gen (DALL-E 3, Google Stitch, Grok Imagine, Replicate SDXL)
-- Video Studio (Quick Clips + Template Engine + Premium Cinematic)
-- Social Calendar (calendar view, history, bulk schedule)
-- Ad Creative (campaign brief, audience targeting)
-- Brand Profiles (create/import/AI generate)
-- Marketing Auto (GHL integration, review management, 4 workflow automations)
-- Plans & Usage (tier display, compute meter, feature access)
-- **Fixed scroll**: .view.active { overflow-y: auto }
-- **7 new endpoints**: brand/generate-ai, image/save-library, marketing/ghl/connect, reviews, review-response, workflows, workflows/toggle
+### Phase 1: Frontend Restoration (DONE)
+- Restored Cmd+K command palette
+- Restored Career Suite tabs (Cover Letter, LinkedIn, Salary, Network)
+- Restored Real Estate property detail view
+- Restored Business Plan AI & Patent tabs
+- Built CookinCards camera scan UI
+- Built LaunchPad 10-step wizard
+- Fixed Social Studio scrolling bug
 
-### Business Center (9 tabs)
-- Overview, Formation (10-step wizard), Domains, Resume, Signatures
-- Business Plan AI (SSE streaming), IP/Patent Intelligence
-- Meetings, Analytics
+### Phase 2: Metering System (DONE)
+- 5-tier pricing ($0/$27/$97/$297/$497)
+- 4 compute levels (Mini/Pro/Max/Max Fast)
+- Feature gating per tier
+- Rate limiting per tier
+- Stripe checkout session creation
+- 65+ integrations marketplace catalog
 
-### Career Suite (13 tabs)
-- Cover Letter AI, LinkedIn Optimizer, Salary Negotiator, Network Mapper + 9 more
+### Phase 3: Business DNA + Revenue System (DONE — April 3, 2026)
+- **5-Step Business DNA Onboarding Wizard**
+  - Step 1: Personal Info (name, email, phone)
+  - Step 2: Business Type (individual/LLC/Corp/nonprofit, EIN, state)
+  - Step 3: Business Details (industry, revenue, employees, address)
+  - Step 4: Goals & Interests (10 categories, multi-select)
+  - Step 5: Tagline + Bio
+  - Saves to backend `/api/user/business-dna` and localStorage
+  - Data injected into AI chat system prompt for personalization
+- **SAL HQ Dashboard (Command Center)**
+  - Profile card with avatar, name, company, tagline, entity badge
+  - Quick Actions row (8 shortcuts)
+  - Business Overview (GHL contacts, pipelines, tier, billing)
+  - Recent Activity feed
+  - Intelligence Pillars based on DNA interests
+  - Lab Assets (saved builds)
+- **Credit Limit Modal System (3 types)**
+  - Credits Exhausted: top-up grid ($5/$10/$25/$50/$60/$100/$250), Stripe checkout
+  - Daily Limit Reached: upgrade CTA
+  - Model Upgrade Required: tier-specific upgrade pricing
+- **Credit Top-Up Checkout**: `/api/billing/credit-topup` → Stripe one-time payment
+- **GHL Environment Fix**: Both `GHL_API_KEY` and `GHL_PRIVATE_TOKEN` configured
 
-### CookinCards (5 tabs)
-- Price, Camera Scan (AI ID + grade), Deals, Portfolio, Rare
+## Pending / Upcoming Tasks
 
-### Real Estate Intelligence (4 tabs)
-- Search (full property detail), Portfolio, Deal Analyzer, Ask SAL
+### P0 — In Progress
+- None currently blocked
 
-### Builder IDE v2
-- 5-agent pipeline, agent cards, design preview, terminal
+### P1 — Next Up
+- Wire Supabase billing tables (billing_profiles, credit_transactions, usage_logs)
+- Full metering middleware (pre-flight/post-flight on every AI call)
+- Credit balance deduction in real-time
+- Stripe webhook handler for subscription lifecycle + credit purchases
+- GHL contact sync on billing events (tier tags, LTV)
+- Live data feeds + tickers for every intelligence vertical
+- E2E testing of Builder v2 pipeline, Launch Pad wizard, CookinCards
 
-### Command Palette (Cmd+K)
-- 30+ items, fuzzy search, Recently Used tracking
+### P2 — Future
+- Investment portfolio (Alpaca API wire-up)
+- Deal Analyzer Engine (Fix & Flip + Rental/DSCR calculators)
+- Lending Pipeline (CookinCapital)
+- Saved Searches with alerts
+- Cross-platform sync (saintsallabs.com ↔ saintsal.ai)
+- iOS app sync
+- ElevenLabs voice agent
+- White-label / HACP provisioning
 
-### GHL Bridge
-- SAAS Configurator, Smart Sync, Lead Bridge, Bridge Controls
-
-## Prioritized Backlog
-
-### P0 (Blocked)
-- Supabase ANON_KEY + SERVICE_KEY for persistent storage
-- GHL API key refresh (currently 401)
-
-### P1
-- Stripe Checkout integration for tier upgrades
-- Settings page with Integrations marketplace UI
-- E2E testing of Builder v2, Launch Pad, CookinCards flows
-
-### P2
-- Usage history visualization
-- Stripe webhooks for automated tier changes
-
-### P3
+### P3 — Backlog
 - iOS app sync, ElevenLabs voice, white-label/HACP
+- Smart Memory System (pgvector semantic search)
+- Custom agent creation for Teams/Enterprise
