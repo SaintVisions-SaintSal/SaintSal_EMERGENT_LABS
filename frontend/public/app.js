@@ -13634,6 +13634,7 @@ function ccScanFromURL() {
 async function ccRunScan(imageUrl, imageBase64) {
   var results = document.getElementById('cc-scan-results');
   if (!results) return;
+  if (typeof salCheckAccess === 'function' && !(await salCheckAccess('cookin_cards_scan'))) return;
   results.innerHTML = '<div style="text-align:center;padding:24px;"><div style="font-size:24px;animation:ccFloat 1s ease-in-out infinite;">🔍</div><div style="color:#F59E0B;font-size:13px;font-weight:700;margin-top:8px;">Identifying card...</div></div>';
 
   try {
@@ -13730,6 +13731,7 @@ async function ccRunScan(imageUrl, imageBase64) {
     }
 
     results.innerHTML = h;
+    if (typeof salLogUsage === 'function') salLogUsage('card_scan', 5);
   } catch (e) {
     results.innerHTML = '<div style="background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);border-radius:12px;padding:16px;color:#f87171;font-size:12px;">Scan failed: ' + e.message + '. Check your internet connection and try again.</div>';
   }
@@ -14525,3 +14527,213 @@ async function triggerDailyMarketing() {
     showToast('Marketing schedule error', 'error');
   }
 }
+
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// METERING & TIER GATING — Real-time Widget, Gate Modal, Auto-Logging
+// ═══════════════════════════════════════════════════════════════════════════════
+
+var salMeter = {
+  userId: 'anonymous',
+  tier: 'pro',
+  tierName: 'Pro',
+  tierColor: '#8B5CF6',
+  used: 0,
+  limit: 2000,
+  remaining: 2000,
+  pctUsed: 0,
+  overage: 0,
+  overageCost: 0,
+  rateRemaining: 300,
+  rateLimit: 300,
+  refreshInterval: null,
+  initialized: false
+};
+
+async function initMetering() {
+  salMeter.initialized = true;
+  await refreshMeterData();
+  // Refresh every 30 seconds
+  salMeter.refreshInterval = setInterval(refreshMeterData, 30000);
+  // Show the widget
+  var widget = document.getElementById('meteringWidget');
+  if (widget) widget.style.display = 'block';
+}
+
+async function refreshMeterData() {
+  try {
+    var resp = await fetch(API + '/api/metering/dashboard?user_id=' + encodeURIComponent(salMeter.userId));
+    var d = await resp.json();
+    salMeter.tier = d.tier;
+    salMeter.tierName = d.tier_name;
+    salMeter.tierColor = d.tier_color;
+    salMeter.used = d.compute.used;
+    salMeter.limit = d.compute.limit;
+    salMeter.remaining = d.compute.remaining;
+    salMeter.pctUsed = d.compute.pct_used;
+    salMeter.overage = d.overage.minutes;
+    salMeter.overageCost = d.overage.cost;
+    salMeter.rateRemaining = d.rate_limit.remaining;
+    salMeter.rateLimit = d.rate_limit.limit;
+    updateMeterUI();
+  } catch(e) {
+    console.warn('Metering refresh failed:', e);
+  }
+}
+
+function updateMeterUI() {
+  var m = salMeter;
+  
+  // Sidebar widget
+  var badge = document.getElementById('meterTierBadge');
+  if (badge) {
+    badge.textContent = m.tierName.toUpperCase();
+    badge.style.background = m.tierColor + '22';
+    badge.style.color = m.tierColor;
+  }
+  var creditsText = document.getElementById('meterCreditsText');
+  if (creditsText) {
+    creditsText.textContent = m.limit > 0 ? m.used + ' / ' + m.limit : m.used + ' used';
+  }
+  var barFill = document.getElementById('meterBarFill');
+  if (barFill) {
+    var pct = Math.min(m.pctUsed, 100);
+    barFill.style.width = pct + '%';
+    if (pct >= 90) barFill.style.background = 'linear-gradient(90deg,#ef4444,#dc2626)';
+    else if (pct >= 70) barFill.style.background = 'linear-gradient(90deg,#F59E0B,#ef4444)';
+    else barFill.style.background = 'linear-gradient(90deg,' + m.tierColor + ',#D4A843)';
+  }
+  var rateText = document.getElementById('meterRateText');
+  if (rateText) rateText.textContent = m.rateRemaining + ' / ' + m.rateLimit + ' req/hr';
+  var overageLabel = document.getElementById('meterOverageLabel');
+  if (overageLabel) {
+    if (m.overage > 0) {
+      overageLabel.style.display = 'inline-block';
+      overageLabel.textContent = '$' + m.overageCost.toFixed(2) + ' overage';
+    } else {
+      overageLabel.style.display = 'none';
+    }
+  }
+  
+  // Topbar
+  var topCredits = document.getElementById('topbarCreditsLabel');
+  if (topCredits) {
+    topCredits.textContent = m.remaining + ' / ' + m.limit + ' credits';
+  }
+  var topBar = document.getElementById('topbarBarFill');
+  if (topBar) {
+    var remainPct = m.limit > 0 ? Math.max(0, 100 - m.pctUsed) : 100;
+    topBar.style.width = remainPct + '%';
+  }
+  
+  // Account page
+  var acctUsed = document.getElementById('accountCreditsUsed');
+  if (acctUsed) acctUsed.textContent = m.used + ' / ' + m.limit + ' used';
+  var acctBar = document.getElementById('accountUsageBar');
+  if (acctBar) acctBar.style.width = m.pctUsed + '%';
+  var acctTier = document.getElementById('accountPlanTier');
+  if (acctTier) acctTier.textContent = m.tierName.toUpperCase();
+  var acctDetails = document.getElementById('accountPlanDetails');
+  if (acctDetails) acctDetails.textContent = m.tierName + ' tier \u2022 ' + m.limit + ' credits/month';
+  
+  // User plan badge in sidebar
+  var planBadge = document.querySelector('.user-plan-badge');
+  if (planBadge) {
+    planBadge.textContent = m.tierName.toUpperCase();
+    planBadge.className = 'user-plan-badge tier-' + m.tier;
+  }
+}
+
+// ─── Tier Gate Modal ─────────────────────────────────────────────────────────
+
+function showTierGate(feature, requiredTier, message) {
+  var modal = document.getElementById('tierGateModal');
+  if (!modal) return;
+  modal.style.display = 'flex';
+  
+  var title = document.getElementById('tierGateTitle');
+  if (title) title.textContent = 'Upgrade to ' + (requiredTier || 'Pro');
+  
+  var msg = document.getElementById('tierGateMessage');
+  if (msg) msg.textContent = message || 'This feature requires a higher plan to access.';
+  
+  var tiers = document.getElementById('tierGateTiers');
+  if (tiers) {
+    var tierList = [
+      { id: 'starter', name: 'Starter', price: '$19', color: '#10B981' },
+      { id: 'pro', name: 'Pro', price: '$49', color: '#8B5CF6' },
+      { id: 'teams', name: 'Teams', price: '$149', color: '#F59E0B' }
+    ];
+    var h = '';
+    tierList.forEach(function(t) {
+      var isRequired = t.name === requiredTier || (!requiredTier && t.id === 'pro');
+      h += '<div style="flex:1;padding:10px;border-radius:8px;border:1px solid ' + (isRequired ? t.color : 'var(--border-subtle,#333)') + ';background:' + (isRequired ? t.color + '11' : 'transparent') + ';text-align:center;">';
+      h += '<div style="font-size:11px;font-weight:700;color:' + t.color + ';">' + t.name + '</div>';
+      h += '<div style="font-size:16px;font-weight:900;color:var(--text-primary);margin-top:2px;">' + t.price + '</div>';
+      h += '<div style="font-size:9px;color:var(--text-muted);">/month</div>';
+      if (isRequired) h += '<div style="font-size:8px;color:' + t.color + ';margin-top:4px;font-weight:700;">RECOMMENDED</div>';
+      h += '</div>';
+    });
+    tiers.innerHTML = h;
+  }
+}
+
+function closeTierGate() {
+  var modal = document.getElementById('tierGateModal');
+  if (modal) modal.style.display = 'none';
+}
+
+// ─── Auto-Logging & Gate Check ───────────────────────────────────────────────
+
+async function salCheckAccess(feature) {
+  try {
+    var resp = await fetch(API + '/api/metering/check-access', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ user_id: salMeter.userId, feature: feature })
+    });
+    var data = await resp.json();
+    if (!data.allowed) {
+      if (data.reason === 'rate_limit') {
+        showToast('Rate limit reached. Try again in ' + (data.resets_in || 60) + 's.', 'warn');
+        return false;
+      }
+      showTierGate(feature, data.required_tier_name, data.upgrade_message || data.message);
+      return false;
+    }
+    return true;
+  } catch(e) {
+    console.warn('Access check failed:', e);
+    return true; // Fail open for dev
+  }
+}
+
+async function salLogUsage(action, computeMinutes, modelUsed) {
+  try {
+    var resp = await fetch(API + '/api/metering/log', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        user_id: salMeter.userId,
+        action: action,
+        compute_minutes: computeMinutes || 1,
+        model_used: modelUsed || ''
+      })
+    });
+    var data = await resp.json();
+    // Update local state
+    salMeter.used = data.total_minutes_used;
+    salMeter.remaining = data.remaining;
+    salMeter.pctUsed = data.pct_used;
+    salMeter.overage = data.overage_minutes;
+    salMeter.overageCost = data.overage_cost;
+    updateMeterUI();
+    return data;
+  } catch(e) {
+    console.warn('Usage log failed:', e);
+  }
+}
+
+// Initialize metering on page load
+setTimeout(initMetering, 500);
+

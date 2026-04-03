@@ -1184,8 +1184,11 @@ function csCoverLetter() {
 function csGenerateCoverLetter() {
   var r = document.getElementById('clResume'), j = document.getElementById('clJobDesc');
   if (!r||!j||!r.value.trim()||!j.value.trim()) { csShowToast('Fill in both fields'); return; }
+  if (typeof salCheckAccess === 'function') { salCheckAccess('career_coverletter').then(function(ok){ if(!ok)return; _doGenerateCoverLetter(r,j); }); } else { _doGenerateCoverLetter(r,j); }
+}
+function _doGenerateCoverLetter(r,j) {
   clState.resumeText=r.value; clState.jobDesc=j.value; clState.loading=true; renderCareerSuite();
-  fetch((window.API||'')+'/api/career/cover-letter',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({resume_text:clState.resumeText,job_description:clState.jobDesc,style:clState.style})}).then(function(r){return r.json()}).then(function(d){clState.result=d;clState.loading=false;renderCareerSuite()}).catch(function(e){clState.loading=false;csShowToast('Error: '+e.message);renderCareerSuite()});
+  fetch((window.API||'')+'/api/career/cover-letter',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({resume_text:clState.resumeText,job_description:clState.jobDesc,style:clState.style})}).then(function(r){return r.json()}).then(function(d){clState.result=d;clState.loading=false;if(typeof salLogUsage==='function')salLogUsage('cover_letter',3);renderCareerSuite()}).catch(function(e){clState.loading=false;csShowToast('Error: '+e.message);renderCareerSuite()});
 }
 
 /* ══════════════════════════════════════════════════════════════════════════════

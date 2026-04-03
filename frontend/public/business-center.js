@@ -1359,6 +1359,7 @@ function bcBusinessPlanAI() {
 
 async function bcGeneratePlan() {
   if (!bcPlanState.idea) { bcPlanState.error = 'Please describe your business idea.'; renderBusinessCenter(); return; }
+  if (!(await salCheckAccess('business_bizplan'))) return;
   bcPlanState.loading = true; bcPlanState.error = ''; bcPlanState.sections = [];
   renderBusinessCenter();
 
@@ -1393,6 +1394,7 @@ async function bcGeneratePlan() {
       }
     }
     bcPlanState.loading = false;
+    if (typeof salLogUsage === 'function') salLogUsage('business_plan', 10);
     renderBusinessCenter();
   } catch (e) {
     bcPlanState.loading = false;
@@ -1486,6 +1488,7 @@ function bcPatentSearch() {
 
 async function bcRunPatentSearch() {
   if (!bcPatentState.description) { bcPatentState.error = 'Please describe the technology.'; renderBusinessCenter(); return; }
+  if (typeof salCheckAccess === 'function' && !(await salCheckAccess('business_patent'))) return;
   bcPatentState.loading = true; bcPatentState.error = ''; bcPatentState.results = null;
   renderBusinessCenter();
 
@@ -1499,6 +1502,7 @@ async function bcRunPatentSearch() {
     var data = await response.json();
     bcPatentState.results = data;
     bcPatentState.loading = false;
+    if (typeof salLogUsage === 'function') salLogUsage('patent_search', 5);
     renderBusinessCenter();
   } catch (e) {
     bcPatentState.loading = false;
