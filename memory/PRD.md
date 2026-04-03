@@ -6,7 +6,7 @@ Full vertical buildout of SaintSal Labs Platform. Existing vanilla JS + FastAPI 
 ## Architecture
 - **Backend**: Python/FastAPI (server.py + /routers/) on port 8001
 - **Frontend**: Vanilla JS + HTML (index.html + app.js + style.css + modules) served via CRA public/
-- **Database**: Supabase PostgreSQL + in-memory for new features
+- **Database**: Supabase PostgreSQL + in-memory for new features (Supabase keys pending)
 - **Auth**: Supabase Auth (magic link + OAuth)
 
 ## What's Been Implemented
@@ -14,45 +14,53 @@ Full vertical buildout of SaintSal Labs Platform. Existing vanilla JS + FastAPI 
 ### March 31, 2026 — Initial Build
 - 32+ new backend endpoints across 8 sections
 - Career Suite: 4 new tabs (Cover Letter AI, LinkedIn Optimizer, Salary Negotiator, Network Mapper)
-- Business Center: 2 new tabs (Business Plan AI, IP/Patent Intelligence)
-- Builder v2, Creative Studio, Launch Pad, CookinCards, Metering endpoints
+- Builder v2 with 5-agent pipeline, agent cards, design preview, terminal
+- Creative Studio (Social Studio) with content generation
+- Metering & Tier Gating system
 
-### April 3, 2026 — Property Search Fix + Cmd+K
-- **Fixed Real Estate full property detail view**: Valuation, rental estimate, 1% rule, legal description, zoning, assessor ID, subdivision, owner info, 3-year tax assessments, property taxes, sale history, 10 comparable sales, comparable rentals
-- **Built Cmd+K Command Palette**: 30+ navigation items, fuzzy search, keyboard nav, categories
-- **Quick Actions topbar button** for discoverability
+### April 3, 2026 — Session 1: Property Search Fix + Cmd+K
+- Fixed Real Estate full property detail view with Legal, Tax, Ownership, Comps data
+- Built Cmd+K Command Palette with 30+ navigation items, fuzzy search, keyboard nav
 
-### April 3, 2026 (Session 2) — Re-applied Frontend After Git Pull
-- **Re-integrated Command Palette into index.html**: Added CSS link, JS script tag, and Cmd+K topbar button
-- **Verified Career Suite tabs intact**: Cover Letter AI, LinkedIn Optimizer, Salary Negotiator, Network Mapper all working with full API integration
-- **Verified Real Estate view intact**: 4-tab nav, property search, distressed deals, Ask SAL with address pre-fill
-- **Verified Business Center intact**: Formation wizard, Domain search, Resume builder, Email signatures, Meeting notes, Analytics
-- **Testing**: Backend 22/22 (100%), Frontend 100% pass rate
-- **Bug fix**: Exposed toggleCommandPalette globally for topbar button click
+### April 3, 2026 — Session 2: Frontend Restoration
+- Re-integrated Command Palette into index.html
+- Verified Career Suite, Real Estate, Business Center all intact after git pull overwrite
+
+### April 3, 2026 — Session 3: Major Feature Buildout
+- **Business Plan AI tab** in Business Center — Full SSE streaming with AI-generated investor-grade plans (Exec Summary, Market Analysis, Competitive Landscape, Financial Projections)
+- **IP / Patent Intelligence tab** in Business Center — FTO analysis, prior art search, IP valuation, licensing opportunities
+- **10-Step Formation Wizard** — Business Type → Name Check → Entity Advisor → Package → Details → Submit → EIN → Domain & DNS → SSL & Email → Compliance Calendar
+- **CookinCards Camera Scan** — Upload photo or paste URL to AI-identify and grade trading cards. Sub-grades for centering, corners, edges, surface. Add to portfolio.
+- **Command Palette "Recently Used"** — localStorage-based tracking of last 5 used items, shown at top on palette open
+- **LaunchPad CSS fix** — Added overflow-y:auto for proper scrolling
+- **Duplicate endpoint cleanup** — Removed duplicate /api/cards/scan from server.py (router version takes priority)
+- **Testing**: Backend 24/24 (100%), Frontend 100%
+
+## Already Built (No Changes Needed)
+- Builder IDE v2: Agent cards, design preview, terminal, 5-agent pipeline ✅
+- Creative Studio: Content generation (image, video, audio), social posting ✅
+- PropertyAPI distressed deals integration ✅
+- Metering & Tier Gating ✅
+- Real Estate Intelligence: Search, Portfolio, Deal Analyzer, Ask SAL ✅
+- Career Suite: 13 tabs including Cover Letter AI, LinkedIn, Salary, Network ✅
 
 ## Prioritized Backlog
 
-### P0 (Critical)
-- Wire Supabase ANON_KEY + SERVICE_KEY for persistent storage (keys needed from user)
-- Migrate in-memory stores to Supabase tables
+### P0 (Blocked — Awaiting User Input)
+- Wire Supabase ANON_KEY + SERVICE_KEY for persistent storage (keys empty in .env)
 
-### P1 (High)
-- Add Business Plan AI + Patent/IP Search tabs to Business Center frontend
-- Creative Studio frontend views
-- Builder IDE v2 frontend upgrade (agent cards, design preview, terminal)
-- CookinCards camera scan UI
-- LaunchPad CSS visibility fix
-
-### P2 (Medium)
-- Launch Pad full 10-step wizard UI
-- Vertical landing states per vertical
-- PropertyAPI integration for deeper data
+### P1 (Post-Supabase)
+- Migrate in-memory stores to Supabase tables (card_collections, builder_sessions, metering)
 - E2E testing of Builder v2 pipeline (5-agent SSE)
-- E2E testing of Launch Pad name check → formation flow
-- E2E testing of CookinCards scan → grade flow
-- Metering and tier gating verification
+- E2E testing of Launch Pad full 10-step formation flow
+- E2E testing of CookinCards scan → grade → portfolio flow
 
-### P3 (Low/Future)
+### P2 (Polish)
+- Vertical landing states per vertical
+- Advanced property detail comparables
+- Real-time metering dashboard widget
+
+### P3 (Future)
 - iOS app sync
 - ElevenLabs voice agent integration
 - Stripe overage billing
