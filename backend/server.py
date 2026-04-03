@@ -224,6 +224,9 @@ builder_uploads = []  # [{id, filename, content_type, size, url, extracted_text}
 # In-memory social connections (production: use DB + encrypted storage)
 social_connections = {}
 
+# In-memory Business DNA cache (fallback when Supabase table doesn't exist yet)
+_business_dna_cache = {}
+
 # ─── API Keys ─────────────────────────────────────────────────────────────────
 
 GODADDY_API_KEY = os.environ.get("GODADDY_API_KEY", "")
@@ -6745,6 +6748,92 @@ async def get_user_dna(request: Request):
         return {"pillars": [], "favorite_teams": {}, "tier": "free", "error": str(e)}
 
 
+@app.post("/api/user/business-dna")
+async def save_business_dna(request: Request):
+    """Save full Business DNA profile (5-step onboarding)."""
+    user = await _get_current_user(request)
+    body = await request.json()
+    # Build the profile payload from the spec
+    profile = {
+        "first_name": body.get("first_name", ""),
+        "last_name": body.get("last_name", ""),
+        "display_name": body.get("display_name", ""),
+        "email": body.get("email", ""),
+        "phone": body.get("phone", ""),
+        "business_name": body.get("business_name", ""),
+        "dba_name": body.get("dba_name", ""),
+        "business_type": body.get("business_type", "individual"),
+        "ein_number": body.get("ein_number", ""),
+        "state_of_incorporation": body.get("state_of_incorporation", ""),
+        "industry": body.get("industry", ""),
+        "naics_code": body.get("naics_code", ""),
+        "years_in_business": body.get("years_in_business"),
+        "number_of_employees": body.get("number_of_employees"),
+        "annual_revenue": body.get("annual_revenue"),
+        "monthly_revenue": body.get("monthly_revenue"),
+        "business_address": body.get("business_address", ""),
+        "business_city": body.get("business_city", ""),
+        "business_state": body.get("business_state", ""),
+        "business_zip": body.get("business_zip", ""),
+        "website": body.get("website", ""),
+        "tagline": body.get("tagline", ""),
+        "bio": body.get("bio", ""),
+        "interests": body.get("interests", []),
+        "onboarding_completed": True,
+    }
+    # Save to Supabase if available, else in-memory
+    if supabase_admin and user and user.get("id"):
+        try:
+            profile["user_id"] = user["id"]
+            result = supabase_admin.table("user_profiles").upsert(
+                profile, on_conflict="user_id"
+            ).execute()
+            # Also update the legacy user_dna table for backward compat
+            dna_data = {
+                "user_id": user["id"],
+                "pillars": body.get("interests", [])[:3],
+                "display_name": profile["display_name"] or f"{profile['first_name']} {profile['last_name']}".strip(),
+                "bio": profile["bio"],
+                "tier": body.get("tier", "free"),
+            }
+            try:
+                supabase_admin.table("user_dna").upsert(dna_data, on_conflict="user_id").execute()
+            except Exception:
+                pass
+            return {"success": True, "profile": profile}
+        except Exception as e:
+            # If table doesn't exist yet, store in memory
+            if "user_profiles" in str(e):
+                _business_dna_cache[user["id"]] = profile
+                return {"success": True, "profile": profile, "storage": "memory"}
+            return JSONResponse({"error": str(e)}, status_code=400)
+    # Fallback: store in memory for anonymous/unauthed
+    anon_id = body.get("anon_id", "anonymous")
+    _business_dna_cache[anon_id] = profile
+    return {"success": True, "profile": profile, "storage": "memory"}
+
+
+@app.get("/api/user/business-dna")
+async def get_business_dna(request: Request):
+    """Get the user's full Business DNA profile."""
+    user = await _get_current_user(request)
+    empty = {"first_name":"","last_name":"","business_name":"","business_type":"individual","interests":[],"onboarding_completed":False}
+    if supabase_admin and user and user.get("id"):
+        try:
+            result = supabase_admin.table("user_profiles").select("*").eq("user_id", user["id"]).limit(1).execute()
+            if result.data:
+                row = result.data[0]
+                row.pop("id", None)
+                return row
+        except Exception:
+            pass
+    # Check memory cache
+    uid = user["id"] if user else "anonymous"
+    if uid in _business_dna_cache:
+        return _business_dna_cache[uid]
+    return empty
+
+
 @app.get("/api/auth/profile")
 async def auth_profile(user=Depends(get_current_user)):
     """Get the current user's profile with credit balance."""
@@ -12393,6 +12482,41 @@ async def billing_checkout(request: Request):
         
         session = _stripe.checkout.Session.create(**session_params)
         return {"url": session.url, "session_id": session.id}
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
+@app.post("/api/billing/credit-topup")
+async def credit_topup_checkout(request: Request):
+    """Create a Stripe checkout session for one-time credit top-up."""
+    import stripe as _stripe
+    STRIPE_KEY = os.environ.get("STRIPE_SECRET_KEY", os.environ.get("STRIPE_KEY", ""))
+    if not STRIPE_KEY:
+        return JSONResponse({"error": "Stripe not configured"}, status_code=500)
+    _stripe.api_key = STRIPE_KEY
+    TOPUP_AMOUNTS = {5: 500, 10: 1000, 25: 2500, 50: 5000, 60: 6000, 100: 10000, 250: 25000}
+    try:
+        body = await request.json()
+        amount = body.get("amount", 25)
+        if amount not in TOPUP_AMOUNTS and (amount < 1 or amount > 1000):
+            return JSONResponse({"error": "Invalid amount. Valid: $5/$10/$25/$50/$60/$100/$250 or $1-$1000"}, status_code=400)
+        amount_cents = TOPUP_AMOUNTS.get(amount, int(amount * 100))
+        session = _stripe.checkout.Session.create(
+            mode="payment",
+            line_items=[{
+                "price_data": {
+                    "currency": "usd",
+                    "product_data": {"name": f"SaintSal Labs — ${amount} Credit Top-Up", "description": f"{amount_cents} credits ({amount_cents // 5} SAL Mini chats)"},
+                    "unit_amount": amount_cents,
+                },
+                "quantity": 1,
+            }],
+            metadata={"type": "credit_topup", "amount_cents": str(amount_cents), "amount_usd": str(amount)},
+            success_url="https://www.saintsallabs.com/#account?topup=success&amount=" + str(amount),
+            cancel_url="https://www.saintsallabs.com/#pricing",
+            allow_promotion_codes=True,
+        )
+        return {"url": session.url, "session_id": session.id, "amount": amount, "credits": amount_cents}
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)
 

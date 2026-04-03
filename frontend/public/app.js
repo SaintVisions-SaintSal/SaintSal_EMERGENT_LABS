@@ -998,10 +998,25 @@ function sendMessage(query) {
   } else {
     // SSE fallback (works everywhere including proxied deployments)
     var buffer = '';
-    var _dna = localStorage.getItem('sal_dna');
+    var _dna = localStorage.getItem('sal_business_dna');
     var _favTeams = localStorage.getItem('sal_fav_teams');
     var _systemCtx = '';
-    if (_dna) _systemCtx += 'User business DNA: ' + _dna + '. Prioritize these domains. ';
+    if (_dna) {
+      try {
+        var _dp = JSON.parse(_dna);
+        var _parts = [];
+        if (_dp.first_name) _parts.push('User: ' + _dp.first_name + ' ' + (_dp.last_name||''));
+        if (_dp.business_name) _parts.push('Company: ' + _dp.business_name);
+        if (_dp.business_type && _dp.business_type !== 'individual') _parts.push('Entity: ' + _dp.business_type);
+        if (_dp.industry) _parts.push('Industry: ' + _dp.industry);
+        if (_dp.annual_revenue) _parts.push('Annual Revenue: $' + Number(_dp.annual_revenue).toLocaleString());
+        if (_dp.business_state) _parts.push('State: ' + _dp.business_state);
+        if (_dp.tagline) _parts.push('Tagline: ' + _dp.tagline);
+        if (_dp.interests && _dp.interests.length) _parts.push('Interests: ' + _dp.interests.join(', '));
+        if (_dp.bio) _parts.push('Bio: ' + _dp.bio);
+        _systemCtx += 'Business DNA — ' + _parts.join(' | ') + '. Personalize all responses to this user context. ';
+      } catch(e) { _systemCtx += 'User business DNA: ' + _dna + '. '; }
+    }
     if (currentVertical === 'sports' && _favTeams) _systemCtx += 'Favorite teams: ' + _favTeams + '. ';
     var _chatPayload = {
       message: query,
@@ -4750,155 +4765,239 @@ document.addEventListener('click', function(e) {
   }
 });
 
-// ─── DNA Onboarding (post-signup, 6 screens) ──────────────────────────────────
+// ─── Business DNA Onboarding (5-step wizard per spec) ──────────────────────────
 function showDNAOnboarding() {
   if (localStorage.getItem('sal_dna_onboarding_done')) return;
-  var userDNA = { pillars: [], teams: [], name: '', handle: '', bio: '', tier: 'free' };
+  var dna = {
+    first_name:'', last_name:'', email:'', phone:'',
+    business_name:'', dba_name:'', business_type:'individual',
+    ein_number:'', state_of_incorporation:'',
+    industry:'', naics_code:'', years_in_business:'', number_of_employees:'',
+    annual_revenue:'', monthly_revenue:'',
+    business_address:'', business_city:'', business_state:'', business_zip:'', website:'',
+    interests: [],
+    tagline:'', bio:''
+  };
   var step = 0;
+  var totalSteps = 5;
   var overlay = document.createElement('div');
   overlay.id = 'dnaOnboardOverlay';
-  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.92);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;backdrop-filter:blur(4px);';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.94);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;backdrop-filter:blur(6px);overflow-y:auto;';
 
-  var PILLARS = [
-    {id:'realestate',icon:'🏠',label:'Real Estate'},
-    {id:'finance',icon:'💰',label:'Finance'},
-    {id:'sports',icon:'🏈',label:'Sports'},
-    {id:'medical',icon:'🏥',label:'Medical'},
-    {id:'tech',icon:'💻',label:'Tech'},
-    {id:'news',icon:'📰',label:'News'},
-    {id:'cookin-cards',icon:'🃏',label:'CookinCards'},
-    {id:'business',icon:'🏢',label:'Business'}
+  var INTERESTS = [
+    {id:'ai_chat',label:'AI Chat & Research',icon:'fa-robot'},
+    {id:'builder',label:'Build Apps / Websites',icon:'fa-code'},
+    {id:'formation',label:'Business Formation',icon:'fa-building'},
+    {id:'lending',label:'Commercial Lending',icon:'fa-hand-holding-usd'},
+    {id:'realestate',label:'Real Estate Investment',icon:'fa-home'},
+    {id:'trading',label:'Stock / Crypto Trading',icon:'fa-chart-line'},
+    {id:'crm',label:'CRM & Marketing',icon:'fa-bullhorn'},
+    {id:'career',label:'Career Tools',icon:'fa-briefcase'},
+    {id:'cards',label:'Trading Cards',icon:'fa-layer-group'},
+    {id:'creative',label:'Creative Content',icon:'fa-palette'}
   ];
-  var TIERS = [
-    {id:'free',label:'Free',price:'$0',desc:'100 credits/mo',color:'#555'},
-    {id:'starter',label:'Starter',price:'$27',desc:'1,000 credits/mo',color:'#22c55e',url:'https://buy.stripe.com/8x2eVea6W3j30wb3DSbjW07'},
-    {id:'pro',label:'Pro',price:'$97',desc:'Unlimited + Builder',color:'#F59E0B',url:'https://buy.stripe.com/5kQ3cw92S8Dn3In4HWbjW08'},
-    {id:'teams',label:'Teams',price:'$297',desc:'Everything + GHL',color:'#8b5cf6',url:'https://buy.stripe.com/fZufZi5QG9Hr2Ej4HWbjW09'}
-  ];
+  var STATES = ['AL','AK','AZ','AR','CA','CO','CT','DE','FL','GA','HI','ID','IL','IN','IA','KS','KY','LA','ME','MD','MA','MI','MN','MS','MO','MT','NE','NV','NH','NJ','NM','NY','NC','ND','OH','OK','OR','PA','RI','SC','SD','TN','TX','UT','VT','VA','WA','WV','WI','WY'];
+
+  function inp(id, ph, val, type) {
+    return '<input id="dna-'+id+'" data-testid="dna-'+id+'" placeholder="'+ph+'" type="'+(type||'text')+'" value="'+(val||'')+'" style="width:100%;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);color:#fff;padding:12px 16px;font-size:14px;border-radius:10px;box-sizing:border-box;margin-bottom:10px;font-family:inherit;" />';
+  }
+  function sel(id, opts, val) {
+    var html = '<select id="dna-'+id+'" data-testid="dna-'+id+'" style="width:100%;background:#141414;border:1px solid rgba(255,255,255,0.1);color:#fff;padding:12px 16px;font-size:14px;border-radius:10px;box-sizing:border-box;margin-bottom:10px;font-family:inherit;appearance:none;-webkit-appearance:none;">';
+    opts.forEach(function(o) {
+      var v = typeof o === 'string' ? o : o.value;
+      var l = typeof o === 'string' ? o : o.label;
+      html += '<option value="'+v+'"'+(v===val?' selected':'')+'>'+l+'</option>';
+    });
+    return html + '</select>';
+  }
+  function dots() {
+    return '<div style="display:flex;justify-content:center;gap:6px;margin-bottom:24px;">' +
+      Array.from({length:totalSteps}, function(_,i) {
+        return '<div style="width:'+(i===step?'24px':'8px')+';height:8px;border-radius:4px;background:'+(i<step?'#D4AF37':i===step?'linear-gradient(90deg,#D4AF37,#F59E0B)':'rgba(255,255,255,0.1)')+';transition:all 0.3s;"></div>';
+      }).join('') + '</div>';
+  }
+  function stepLabel() {
+    return '<div style="font-size:10px;color:#555;letter-spacing:2px;font-weight:600;text-align:center;margin-bottom:8px;">STEP '+(step+1)+' OF '+totalSteps+'</div>';
+  }
+  function cta(label, enabled) {
+    return '<button data-testid="dna-next-btn" onclick="dnaNext()" style="width:100%;background:'+(enabled!==false?'linear-gradient(135deg,#D4AF37,#8A7129)':'#1a1a1a')+';color:'+(enabled!==false?'#080808':'#444')+';padding:16px;font-size:15px;font-weight:900;border:none;cursor:'+(enabled!==false?'pointer':'default')+';border-radius:10px;letter-spacing:1px;margin-top:8px;font-family:\'Space Grotesk\',sans-serif;">'+label+'</button>';
+  }
 
   function renderStep() {
     var card = '';
-    var dots = '<div style="display:flex;justify-content:center;gap:6px;margin-bottom:20px;">' +
-      [0,1,2,3,4,5].map(function(i) {
-        return '<div style="width:8px;height:8px;border-radius:50%;background:' + (i===step?'#00FF88':'rgba(255,255,255,0.15)') + ';transition:background 0.3s;"></div>';
-      }).join('') + '</div>';
-
     if (step === 0) {
-      card = dots +
-        '<div style="font-size:56px;text-align:center;margin-bottom:16px;">👋</div>' +
-        '<h2 style="font-family:\'Space Grotesk\',sans-serif;font-size:26px;font-weight:900;text-align:center;margin:0 0 10px;">Welcome to SaintSal\u2122 Labs</h2>' +
-        '<p style="color:#adaaaa;text-align:center;margin:0 0 28px;line-height:1.6;">Let\u2019s build your intelligence profile<br>so SAL knows exactly how to help you.</p>' +
-        '<button onclick="dnaNext()" style="width:100%;background:#00FF88;color:#006532;padding:16px;font-family:\'Space Grotesk\',sans-serif;font-size:15px;font-weight:900;border:none;cursor:pointer;letter-spacing:1px;">GET STARTED \u2192</button>';
-    } else if (step === 1) {
-      var pillGrid = PILLARS.map(function(p) {
-        var sel = userDNA.pillars.indexOf(p.id) > -1;
-        return '<div onclick="dnaPillarToggle(\'' + p.id + '\')" id="dna-pillar-' + p.id + '" style="background:' + (sel?'rgba(0,255,136,0.15)':'rgba(255,255,255,0.04)') + ';border:1px solid ' + (sel?'#00FF88':'rgba(255,255,255,0.08)') + ';padding:14px 8px;text-align:center;cursor:pointer;transition:all 0.2s;border-radius:10px;">' +
-          '<div style="font-size:24px;margin-bottom:4px;">' + p.icon + '</div>' +
-          '<div style="font-size:11px;font-weight:700;color:' + (sel?'#00FF88':'#adaaaa') + '">' + p.label + '</div>' +
-          '</div>';
-      }).join('');
-      card = dots +
-        '<h2 style="font-family:\'Space Grotesk\',sans-serif;font-size:20px;font-weight:900;text-align:center;margin:0 0 6px;">Choose Your 3 Pillars</h2>' +
-        '<p style="color:#777;text-align:center;font-size:12px;margin:0 0 16px;">What drives your business? Pick exactly 3.</p>' +
-        '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:20px;">' + pillGrid + '</div>' +
-        '<div id="dna-pillar-count" style="text-align:center;font-size:11px;color:#555;margin-bottom:16px;">' + userDNA.pillars.length + '/3 selected</div>' +
-        '<button onclick="dnaNext()" style="width:100%;background:' + (userDNA.pillars.length===3?'#00FF88':'#262626') + ';color:' + (userDNA.pillars.length===3?'#006532':'#555') + ';padding:14px;font-weight:900;border:none;cursor:pointer;border-radius:8px;font-size:14px;">CONTINUE \u2192</button>';
-    } else if (step === 2) {
-      var hasSports = userDNA.pillars.indexOf('sports') > -1;
-      if (hasSports) {
-        card = dots +
-          '<h2 style="font-family:\'Space Grotesk\',sans-serif;font-size:20px;font-weight:900;text-align:center;margin:0 0 6px;">Pick Your Teams</h2>' +
-          '<p style="color:#777;font-size:12px;text-align:center;margin:0 0 16px;">SAL will personalize sports intel for you.</p>' +
-          '<input id="dna-teams-input" placeholder="e.g. Lakers, Cowboys, Yankees..." style="width:100%;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);color:#fff;padding:12px 16px;font-size:14px;border-radius:8px;box-sizing:border-box;margin-bottom:20px;" value="' + userDNA.teams.join(', ') + '" />' +
-          '<button onclick="dnaNext()" style="width:100%;background:#00FF88;color:#006532;padding:14px;font-weight:900;border:none;cursor:pointer;border-radius:8px;font-size:14px;">CONTINUE \u2192</button>';
-      } else {
-        step++;
-        renderStep();
-        return;
-      }
-    } else if (step === 3) {
-      card = dots +
-        '<h2 style="font-family:\'Space Grotesk\',sans-serif;font-size:20px;font-weight:900;text-align:center;margin:0 0 6px;">Your SAL Profile</h2>' +
-        '<p style="color:#777;font-size:12px;text-align:center;margin:0 0 16px;">How should SAL know you?</p>' +
-        '<input id="dna-name" placeholder="Display name" style="width:100%;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);color:#fff;padding:12px;font-size:14px;border-radius:8px;box-sizing:border-box;margin-bottom:10px;" value="' + userDNA.name + '" />' +
-        '<input id="dna-handle" placeholder="@username" style="width:100%;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);color:#fff;padding:12px;font-size:14px;border-radius:8px;box-sizing:border-box;margin-bottom:10px;" value="' + userDNA.handle + '" />' +
-        '<textarea id="dna-bio" placeholder="Short bio..." style="width:100%;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);color:#fff;padding:12px;font-size:13px;border-radius:8px;box-sizing:border-box;height:80px;resize:none;margin-bottom:16px;">' + userDNA.bio + '</textarea>' +
-        '<button onclick="dnaNext()" style="width:100%;background:#00FF88;color:#006532;padding:14px;font-weight:900;border:none;cursor:pointer;border-radius:8px;font-size:14px;">CONTINUE \u2192</button>';
-    } else if (step === 4) {
-      var tierCards = TIERS.map(function(t) {
-        var sel = userDNA.tier === t.id;
-        return '<div onclick="dnaTierSelect(\'' + t.id + '\')" id="dna-tier-' + t.id + '" style="background:' + (sel?'rgba(0,255,136,0.1)':'rgba(255,255,255,0.03)') + ';border:1px solid ' + (sel?t.color:'rgba(255,255,255,0.08)') + ';padding:12px;cursor:pointer;border-radius:8px;margin-bottom:8px;transition:all 0.2s;">' +
-          '<div style="display:flex;justify-content:space-between;align-items:center;">' +
-            '<div><div style="font-weight:700;font-size:14px;color:' + (sel?t.color:'#fff') + '">' + t.label + '</div><div style="font-size:11px;color:#555;margin-top:2px;">' + t.desc + '</div></div>' +
-            '<div style="font-size:16px;font-weight:900;color:' + t.color + '">' + t.price + '</div>' +
-          '</div>' +
-          '</div>';
-      }).join('');
-      card = dots +
-        '<h2 style="font-family:\'Space Grotesk\',sans-serif;font-size:20px;font-weight:900;text-align:center;margin:0 0 16px;">Choose Your Plan</h2>' +
-        tierCards +
-        '<button onclick="dnaFinish()" style="width:100%;background:#00FF88;color:#006532;padding:14px;font-weight:900;border:none;cursor:pointer;border-radius:8px;font-size:14px;margin-top:8px;">LAUNCH MY SAL \u2192</button>';
-    } else if (step === 5) {
-      card = dots +
-        '<div style="font-size:56px;text-align:center;margin-bottom:16px;">\u26A1</div>' +
-        '<h2 style="font-family:\'Space Grotesk\',sans-serif;font-size:26px;font-weight:900;text-align:center;margin:0 0 10px;color:#00FF88;">Your SAL Is Ready.</h2>' +
-        '<p style="color:#adaaaa;text-align:center;margin:0 0 24px;">Intelligence profile saved. Your platform is personalized.</p>' +
-        '<div style="background:rgba(0,255,136,0.06);border:1px solid rgba(0,255,136,0.15);border-radius:10px;padding:14px;margin-bottom:20px;">' +
-          '<div style="font-size:11px;color:#00FF88;font-weight:700;letter-spacing:1px;margin-bottom:6px;">YOUR PILLARS</div>' +
-          '<div style="font-size:13px;color:#adaaaa;">' + userDNA.pillars.join(' · ') + '</div>' +
+      // Step 1: Personal Info
+      card = dots() + stepLabel() +
+        '<h2 style="font-family:\'Space Grotesk\',sans-serif;font-size:24px;font-weight:900;text-align:center;margin:0 0 4px;color:#fff;">Personal Info</h2>' +
+        '<p style="color:#666;text-align:center;font-size:13px;margin:0 0 24px;">Tell SAL who you are.</p>' +
+        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">' +
+          inp('first_name','First Name',dna.first_name) +
+          inp('last_name','Last Name',dna.last_name) +
         '</div>' +
-        '<button onclick="dnaClose()" style="width:100%;background:#00FF88;color:#006532;padding:16px;font-family:\'Space Grotesk\',sans-serif;font-size:15px;font-weight:900;border:none;cursor:pointer;border-radius:0;letter-spacing:1px;">OPEN MY DASHBOARD \u2192</button>';
+        inp('email','Email Address',dna.email,'email') +
+        inp('phone','Phone Number',dna.phone,'tel') +
+        cta('CONTINUE');
+    } else if (step === 1) {
+      // Step 2: Business Type
+      var isCompany = dna.business_type !== 'individual';
+      var typeOpts = [
+        {value:'individual',label:'Individual / Sole Proprietor'},
+        {value:'llc',label:'LLC'},
+        {value:'c_corp',label:'C Corporation'},
+        {value:'s_corp',label:'S Corporation'},
+        {value:'nonprofit',label:'Nonprofit'},
+        {value:'pc',label:'Professional Corporation'},
+        {value:'partnership',label:'Partnership'}
+      ];
+      card = dots() + stepLabel() +
+        '<h2 style="font-family:\'Space Grotesk\',sans-serif;font-size:24px;font-weight:900;text-align:center;margin:0 0 4px;color:#fff;">Business Type</h2>' +
+        '<p style="color:#666;text-align:center;font-size:13px;margin:0 0 24px;">What kind of entity are you?</p>' +
+        '<div style="font-size:11px;color:#888;margin-bottom:6px;font-weight:600;">Entity Type</div>' +
+        sel('business_type', typeOpts, dna.business_type) +
+        '<div id="dna-company-fields" style="'+(isCompany?'':'display:none;')+'">' +
+          inp('business_name','Legal Business Name',dna.business_name) +
+          inp('dba_name','DBA / Trade Name (optional)',dna.dba_name) +
+          '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">' +
+            inp('ein_number','EIN / Tax ID',dna.ein_number) +
+            '<div>' +
+              '<select id="dna-state_of_incorporation" data-testid="dna-state" style="width:100%;background:#141414;border:1px solid rgba(255,255,255,0.1);color:#fff;padding:12px 16px;font-size:14px;border-radius:10px;box-sizing:border-box;margin-bottom:10px;font-family:inherit;">' +
+                '<option value="">State of Inc.</option>' +
+                STATES.map(function(s){return '<option value="'+s+'"'+(s===dna.state_of_incorporation?' selected':'')+'>'+s+'</option>';}).join('') +
+              '</select>' +
+            '</div>' +
+          '</div>' +
+        '</div>' +
+        cta('CONTINUE');
+    } else if (step === 2) {
+      // Step 3: Business Details
+      card = dots() + stepLabel() +
+        '<h2 style="font-family:\'Space Grotesk\',sans-serif;font-size:24px;font-weight:900;text-align:center;margin:0 0 4px;color:#fff;">Business Details</h2>' +
+        '<p style="color:#666;text-align:center;font-size:13px;margin:0 0 24px;">Help SAL understand your operation.</p>' +
+        inp('industry','Industry (e.g. Real Estate, Tech, Finance)',dna.industry) +
+        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">' +
+          inp('years_in_business','Years in Business',dna.years_in_business,'number') +
+          inp('number_of_employees','# Employees',dna.number_of_employees,'number') +
+        '</div>' +
+        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">' +
+          inp('annual_revenue','Annual Revenue ($)',dna.annual_revenue,'number') +
+          inp('monthly_revenue','Monthly Revenue ($)',dna.monthly_revenue,'number') +
+        '</div>' +
+        inp('business_address','Business Address',dna.business_address) +
+        '<div style="display:grid;grid-template-columns:2fr 1fr 1fr;gap:10px;">' +
+          inp('business_city','City',dna.business_city) +
+          '<div>' +
+            '<select id="dna-business_state" data-testid="dna-biz-state" style="width:100%;background:#141414;border:1px solid rgba(255,255,255,0.1);color:#fff;padding:12px 16px;font-size:14px;border-radius:10px;box-sizing:border-box;margin-bottom:10px;font-family:inherit;">' +
+              '<option value="">ST</option>' +
+              STATES.map(function(s){return '<option value="'+s+'"'+(s===dna.business_state?' selected':'')+'>'+s+'</option>';}).join('') +
+            '</select>' +
+          '</div>' +
+          inp('business_zip','ZIP',dna.business_zip) +
+        '</div>' +
+        inp('website','Website URL (optional)',dna.website,'url') +
+        cta('CONTINUE');
+    } else if (step === 3) {
+      // Step 4: Goals & Interests
+      var grid = INTERESTS.map(function(it) {
+        var sel = dna.interests.indexOf(it.id) > -1;
+        return '<div onclick="dnaToggleInterest(\''+it.id+'\')" data-testid="dna-interest-'+it.id+'" data-iid="'+it.id+'" class="dna-interest-tile" style="display:flex;align-items:center;gap:12px;padding:14px 16px;background:'+(sel?'rgba(212,175,55,0.12)':'rgba(255,255,255,0.03)')+';border:1px solid '+(sel?'#D4AF37':'rgba(255,255,255,0.08)')+';border-radius:12px;cursor:pointer;transition:all 0.15s;">' +
+          '<i class="fas '+it.icon+'" style="font-size:16px;color:'+(sel?'#D4AF37':'#555')+';width:20px;text-align:center;"></i>' +
+          '<span style="font-size:13px;font-weight:600;color:'+(sel?'#D4AF37':'#999')+';">'+it.label+'</span>' +
+          (sel ? '<i class="fas fa-check-circle" style="margin-left:auto;color:#D4AF37;font-size:14px;"></i>' : '') +
+        '</div>';
+      }).join('');
+      card = dots() + stepLabel() +
+        '<h2 style="font-family:\'Space Grotesk\',sans-serif;font-size:24px;font-weight:900;text-align:center;margin:0 0 4px;color:#fff;">Goals & Interests</h2>' +
+        '<p style="color:#666;text-align:center;font-size:13px;margin:0 0 20px;">What brings you to SaintSal? Select all that apply.</p>' +
+        '<div style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px;">'+grid+'</div>' +
+        '<div style="text-align:center;font-size:11px;color:#555;margin-bottom:8px;">'+dna.interests.length+' selected</div>' +
+        cta('CONTINUE', dna.interests.length > 0);
+    } else if (step === 4) {
+      // Step 5: Tagline + Bio
+      card = dots() + stepLabel() +
+        '<h2 style="font-family:\'Space Grotesk\',sans-serif;font-size:24px;font-weight:900;text-align:center;margin:0 0 4px;color:#fff;">Your Brand</h2>' +
+        '<p style="color:#666;text-align:center;font-size:13px;margin:0 0 24px;">Give SAL your elevator pitch.</p>' +
+        inp('tagline','Business Tagline (short)',dna.tagline) +
+        '<textarea id="dna-bio" data-testid="dna-bio" placeholder="Business Description / Bio..." style="width:100%;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);color:#fff;padding:12px 16px;font-size:14px;border-radius:10px;box-sizing:border-box;height:100px;resize:none;margin-bottom:10px;font-family:inherit;">'+dna.bio+'</textarea>' +
+        cta('LAUNCH MY SAL');
     }
 
-    overlay.innerHTML = '<div style="background:#0e0e0e;border:1px solid rgba(255,255,255,0.08);padding:28px;max-width:420px;width:100%;border-radius:16px;max-height:90vh;overflow-y:auto;">' + card + '</div>';
+    // Back button for steps > 0
+    var backBtn = step > 0 ? '<button data-testid="dna-back-btn" onclick="dnaBack()" style="width:100%;background:none;border:1px solid rgba(255,255,255,0.06);color:#555;padding:12px;font-size:13px;border-radius:10px;cursor:pointer;margin-top:8px;">Back</button>' : '';
+
+    overlay.innerHTML = '<div style="background:#0a0a0a;border:1px solid rgba(212,175,55,0.15);padding:32px 28px;max-width:480px;width:100%;border-radius:20px;max-height:90vh;overflow-y:auto;box-shadow:0 24px 48px rgba(0,0,0,0.5);">' +
+      '<div style="text-align:center;margin-bottom:16px;"><img src="saintsal-icon-sm.png" alt="SAL" style="width:40px;height:40px;border-radius:10px;opacity:0.8;" onerror="this.style.display=\'none\'" /></div>' +
+      card + backBtn + '</div>';
+
+    // Wire up business type toggle for step 1
+    if (step === 1) {
+      setTimeout(function() {
+        var btSel = document.getElementById('dna-business_type');
+        if (btSel) btSel.onchange = function() {
+          dna.business_type = btSel.value;
+          var cf = document.getElementById('dna-company-fields');
+          if (cf) cf.style.display = btSel.value !== 'individual' ? '' : 'none';
+        };
+      }, 50);
+    }
   }
 
-  window.dnaPillarToggle = function(id) {
-    var idx = userDNA.pillars.indexOf(id);
-    if (idx > -1) { userDNA.pillars.splice(idx, 1); }
-    else if (userDNA.pillars.length < 3) { userDNA.pillars.push(id); }
+  function collectFields() {
+    var fields = ['first_name','last_name','email','phone','business_name','dba_name','ein_number','state_of_incorporation','industry','naics_code','years_in_business','number_of_employees','annual_revenue','monthly_revenue','business_address','business_city','business_state','business_zip','website','tagline'];
+    fields.forEach(function(f) {
+      var el = document.getElementById('dna-'+f);
+      if (el) dna[f] = el.value;
+    });
+    var btSel = document.getElementById('dna-business_type');
+    if (btSel) dna.business_type = btSel.value;
+    var bioEl = document.getElementById('dna-bio');
+    if (bioEl) dna.bio = bioEl.value;
+  }
+
+  window.dnaToggleInterest = function(id) {
+    var idx = dna.interests.indexOf(id);
+    if (idx > -1) dna.interests.splice(idx, 1);
+    else dna.interests.push(id);
     renderStep();
   };
-  window.dnaTierSelect = function(id) { userDNA.tier = id; renderStep(); };
   window.dnaNext = function() {
-    if (step === 1 && userDNA.pillars.length !== 3) {
-      showToast('Please select exactly 3 pillars', 'error'); return;
+    collectFields();
+    if (step === 3 && dna.interests.length === 0) {
+      if (typeof showToast === 'function') showToast('Select at least one interest', 'error');
+      return;
     }
-    if (step === 2) {
-      var teamsEl = document.getElementById('dna-teams-input');
-      if (teamsEl) userDNA.teams = teamsEl.value.split(',').map(function(s) { return s.trim(); }).filter(Boolean);
-    }
-    if (step === 3) {
-      userDNA.name = (document.getElementById('dna-name') || {}).value || '';
-      userDNA.handle = (document.getElementById('dna-handle') || {}).value || '';
-      userDNA.bio = (document.getElementById('dna-bio') || {}).value || '';
+    if (step === 4) {
+      // Final step — save and close
+      collectFields();
+      dna.display_name = (dna.first_name + ' ' + dna.last_name).trim();
+      // Save to localStorage
+      localStorage.setItem('sal_business_dna', JSON.stringify(dna));
+      localStorage.setItem('sal_dna', JSON.stringify(dna.interests.slice(0,3)));
+      localStorage.setItem('sal_dna_primary', dna.interests[0] || '');
+      if (dna.first_name) localStorage.setItem('sal_user_name', dna.display_name);
+      localStorage.setItem('sal_dna_onboarding_done', '1');
+      // Save to backend
+      fetch(API + '/api/user/business-dna', {
+        method: 'POST',
+        headers: Object.assign({'Content-Type': 'application/json'}, authHeaders()),
+        body: JSON.stringify(dna)
+      }).catch(function(e) { console.warn('[DNA save]', e); });
+      // Also legacy save
+      fetch(API + '/api/user/dna', {
+        method: 'POST',
+        headers: Object.assign({'Content-Type': 'application/json'}, authHeaders()),
+        body: JSON.stringify({pillars: dna.interests.slice(0,3), display_name: dna.display_name, bio: dna.bio, tier: 'free'})
+      }).catch(function(e) { console.warn('[DNA legacy]', e); });
+      overlay.remove();
+      if (typeof showToast === 'function') showToast('Business DNA saved! Welcome to SaintSal.', 'success');
+      navigate('my-sal');
+      return;
     }
     step++;
     renderStep();
   };
-  window.dnaFinish = function() {
-    localStorage.setItem('sal_dna', JSON.stringify(userDNA.pillars));
-    localStorage.setItem('sal_dna_primary', userDNA.pillars[0] || '');
-    if (userDNA.teams.length) localStorage.setItem('sal_fav_teams', userDNA.teams.join(', '));
-    if (userDNA.name) localStorage.setItem('sal_user_name', userDNA.name);
-    if (userDNA.handle) localStorage.setItem('sal_user_handle', userDNA.handle);
-    localStorage.setItem('sal_tier', userDNA.tier);
-    // Save to backend
-    fetch(API + '/api/user/dna', {
-      method: 'POST',
-      headers: Object.assign({'Content-Type': 'application/json'}, authHeaders()),
-      body: JSON.stringify(userDNA)
-    }).catch(function(e) { console.warn('[DNA save]', e); });
-    // Redirect to paid tier if not free
-    var tier = TIERS.find(function(t) { return t.id === userDNA.tier; });
-    if (tier && tier.url) { window.open(tier.url, '_blank'); }
-    step = 5;
-    renderStep();
-  };
-  window.dnaClose = function() {
-    localStorage.setItem('sal_dna_onboarding_done', '1');
-    overlay.remove();
-    navigate('my-sal');
+  window.dnaBack = function() {
+    collectFields();
+    if (step > 0) { step--; renderStep(); }
   };
 
   renderStep();
@@ -12984,25 +13083,38 @@ function renderMySAL() {
   var root = document.getElementById('mySalRoot');
   if (!root) return;
   var token = localStorage.getItem('sal_token') || sessionStorage.getItem('sal_token');
-  if (!token) {
+  var dnaRaw = localStorage.getItem('sal_business_dna');
+  var dna = dnaRaw ? JSON.parse(dnaRaw) : null;
+
+  // If no token AND no DNA → show sign-in
+  if (!token && (!dna || !dna.first_name)) {
     root.innerHTML = '<div style="padding:40px 20px;text-align:center;max-width:480px;margin:0 auto;">' +
-      '<div style="font-size:48px;margin-bottom:16px">⚡</div>' +
-      '<h2 style="font-size:24px;font-weight:900;color:white;margin-bottom:8px">Build Your SAL™</h2>' +
+      '<div style="font-size:48px;margin-bottom:16px"><i class="fas fa-bolt" style="color:#D4AF37;"></i></div>' +
+      '<h2 style="font-size:24px;font-weight:900;color:white;margin-bottom:8px">Build Your SAL</h2>' +
       '<p style="color:#666;margin-bottom:24px">Sign in to personalize SAL to your business DNA</p>' +
-      '<button onclick="setView(\'account\')" style="background:linear-gradient(135deg,#D4AF37,#8A7129);color:#080808;border:none;padding:14px 32px;border-radius:10px;font-size:16px;font-weight:900;cursor:pointer;">Sign In / Sign Up →</button>' +
+      '<button data-testid="mysal-signin" onclick="setView(\'account\')" style="background:linear-gradient(135deg,#D4AF37,#8A7129);color:#080808;border:none;padding:14px 32px;border-radius:10px;font-size:16px;font-weight:900;cursor:pointer;">Sign In / Sign Up</button>' +
       '</div>';
     return;
   }
-  root.innerHTML = '<div style="padding:40px;text-align:center;color:#555;">Loading your SAL...</div>';
-  fetch('/api/social-studio/brand-dna', {headers:{'Authorization':'Bearer '+token}})
-    .then(function(r){return r.json();})
-    .then(function(d){
-      if (!d.brand_dna || !d.brand_dna.industry) {
-        root.innerHTML = getDNAOnboardingHTML();
-      } else {
-        root.innerHTML = getMySALDashboardHTML(d.brand_dna);
-      }
-    }).catch(function(){root.innerHTML = getDNAOnboardingHTML();});
+  // If DNA exists (even without auth), show the dashboard
+  if (!dna || !dna.first_name) {
+    // Has token but no DNA — show DNA onboarding prompt
+    root.innerHTML = getDNAOnboardingHTML();
+    return;
+  }
+  root.innerHTML = getMySALDashboardHTML(dna);
+  // Load live data
+  setTimeout(function() { mysalLoadGHL(); mysalLoadPortfolio(); mysalLoadRE(); }, 200);
+  // Fetch from backend to keep in sync (only if authed)
+  if (token) {
+    fetch(API + '/api/user/business-dna', {headers: authHeaders()})
+      .then(function(r){return r.json();})
+      .then(function(d){
+        if (d && d.first_name) {
+          localStorage.setItem('sal_business_dna', JSON.stringify(d));
+        }
+      }).catch(function(){});
+  }
 }
 
 function getDNAOnboardingHTML() {
@@ -13066,192 +13178,169 @@ function saveDNA() {
 }
 
 function getMySALDashboardHTML(dna) {
-  var interests = dna.interests || [dna.industry || 'search'];
-  var dnaRaw = localStorage.getItem('sal_dna');
-  var dnaArr = dnaRaw ? JSON.parse(dnaRaw) : interests;
+  dna = dna || {};
+  var displayName = dna.display_name || dna.first_name ? (dna.first_name + ' ' + (dna.last_name||'')).trim() : '';
+  var businessName = dna.business_name || '';
+  var tagline = dna.tagline || '';
+  var interests = dna.interests || [];
+  var dnaArr = interests.length ? interests : (function(){ var r = localStorage.getItem('sal_dna'); return r ? JSON.parse(r) : []; })();
   var searches = chatHistory.filter(function(m){return m.role==='user';}).slice(-3);
   var totalSearches = parseInt(localStorage.getItem('sal_total_searches')||'0');
   var favTeams = localStorage.getItem('sal_fav_teams') || '';
-  var userEmail = window.__salUser && window.__salUser.email ? window.__salUser.email : '';
-  var initLetter = userEmail ? userEmail[0].toUpperCase() : 'C';
+  var userEmail = window.__salUser && window.__salUser.email ? window.__salUser.email : dna.email || '';
+  var initLetter = displayName ? displayName[0].toUpperCase() : (userEmail ? userEmail[0].toUpperCase() : 'S');
+  var entityLabel = dna.business_type && dna.business_type !== 'individual' ? dna.business_type.replace(/_/g,' ').toUpperCase() : '';
 
-  // ── Hero Header ──
-  var heroCard =
-    '<div style="background:linear-gradient(180deg,#0a100a 0%,#080808 100%);padding:20px 16px 24px;border-bottom:1px solid rgba(255,255,255,0.06);">' +
+  // ── SECTION 1: Profile + Business DNA Card ──
+  var profileCard =
+    '<div style="background:linear-gradient(180deg,#0a100a 0%,#080808 100%);padding:24px 18px 20px;border-bottom:1px solid rgba(212,175,55,0.1);">' +
       '<div style="font-size:9px;color:#3a3a3a;letter-spacing:3px;font-weight:600;margin-bottom:16px;font-family:monospace;">SAINTSALLABS</div>' +
-      '<div style="display:flex;align-items:flex-start;gap:16px;margin-bottom:18px;">' +
-        '<div style="flex:1;">' +
-          '<div style="font-size:30px;font-weight:900;color:#fff;line-height:1.05;letter-spacing:-1px;">CLIENT:<br>UNIFIED<br>DASHBOARD</div>' +
-        '</div>' +
+      '<div style="display:flex;align-items:flex-start;gap:16px;margin-bottom:16px;">' +
         '<div style="position:relative;flex-shrink:0;">' +
-          '<div style="width:66px;height:66px;border-radius:50%;background:linear-gradient(135deg,#1c1c1c,#2a2a2a);border:2px solid rgba(245,158,11,0.35);display:flex;align-items:center;justify-content:center;font-size:26px;font-weight:900;color:#F59E0B;">' + initLetter + '</div>' +
+          '<div data-testid="mysal-avatar" style="width:72px;height:72px;border-radius:50%;background:linear-gradient(135deg,#1c1c1c,#2a2a2a);border:2px solid rgba(212,175,55,0.4);display:flex;align-items:center;justify-content:center;font-size:28px;font-weight:900;color:#D4AF37;">' + initLetter + '</div>' +
           '<div style="position:absolute;bottom:2px;right:2px;width:14px;height:14px;border-radius:50%;background:#22c55e;border:2px solid #080808;"></div>' +
         '</div>' +
-      '</div>' +
-      '<div style="display:flex;align-items:center;gap:8px;">' +
-        '<div style="background:rgba(245,158,11,0.15);border:1px solid rgba(245,158,11,0.4);color:#F59E0B;padding:4px 14px;border-radius:20px;font-size:10px;font-weight:700;">TEAMS plan</div>' +
-        '<div style="background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.3);color:#22c55e;padding:4px 14px;border-radius:20px;font-size:10px;font-weight:700;">● SYSTEM NOMINAL</div>' +
-      '</div>' +
-    '</div>';
-
-  // ── GHL Bridge card ──
-  var ghlCard =
-    '<div style="background:rgba(19,19,19,0.8);backdrop-filter:blur(12px);border:1px solid rgba(255,255,255,0.08);border-radius:16px;padding:18px;margin-bottom:12px;">' +
-      '<div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:14px;">' +
-        '<div style="font-size:10px;letter-spacing:2px;color:#F59E0B;font-weight:700;line-height:1.5;">GHL OPERATIONAL<br>BRIDGE</div>' +
-        '<button onclick="setView(\'ghl-bridge\')" style="background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.25);color:#F59E0B;padding:6px 10px;border-radius:8px;font-size:8px;font-weight:700;cursor:pointer;letter-spacing:1px;text-align:center;line-height:1.4;white-space:nowrap;">GHL CONFIGURATOR<br>SETTINGS</button>' +
-      '</div>' +
-      '<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px;" id="mysal-ghl-stats">' +
-        '<div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:10px;padding:12px;">' +
-          '<div style="font-size:9px;color:#555;letter-spacing:1px;margin-bottom:4px;">CONTACTS</div>' +
-          '<div style="font-size:22px;font-weight:900;color:#E5E5E5;" id="ghl-contacts">24</div>' +
-        '</div>' +
-        '<div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:10px;padding:12px;">' +
-          '<div style="font-size:9px;color:#555;letter-spacing:1px;margin-bottom:4px;">CALENDAR</div>' +
-          '<div style="font-size:22px;font-weight:900;color:#E5E5E5;" id="ghl-calendar">8</div>' +
-        '</div>' +
-        '<div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:10px;padding:12px;">' +
-          '<div style="font-size:9px;color:#555;letter-spacing:1px;margin-bottom:4px;">TOTAL TASKS</div>' +
-          '<div style="font-size:22px;font-weight:900;color:#E5E5E5;" id="ghl-tasks">—</div>' +
-        '</div>' +
-        '<div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:10px;padding:12px;">' +
-          '<div style="font-size:9px;color:#555;letter-spacing:1px;margin-bottom:4px;">NEW LEADS</div>' +
-          '<div style="display:flex;align-items:baseline;gap:6px;">' +
-            '<div style="font-size:22px;font-weight:900;color:#E5E5E5;" id="ghl-leads">1,240</div>' +
-            '<div style="font-size:12px;font-weight:700;color:#22c55e;">+12</div>' +
+        '<div style="flex:1;min-width:0;">' +
+          '<div data-testid="mysal-name" style="font-size:22px;font-weight:900;color:#fff;line-height:1.15;margin-bottom:4px;">' + (displayName || 'Welcome') + '</div>' +
+          (businessName ? '<div data-testid="mysal-company" style="font-size:13px;color:#888;margin-bottom:4px;">' + businessName + (entityLabel ? ' <span style="color:#555;font-size:10px;">(' + entityLabel + ')</span>' : '') + '</div>' : '') +
+          (tagline ? '<div style="font-size:12px;color:#D4AF37;font-style:italic;margin-bottom:6px;">"' + tagline + '"</div>' : '') +
+          '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;">' +
+            (dna.industry ? '<div style="background:rgba(212,175,55,0.1);border:1px solid rgba(212,175,55,0.25);color:#D4AF37;padding:3px 10px;border-radius:20px;font-size:9px;font-weight:700;">' + dna.industry + '</div>' : '') +
+            (dna.business_state ? '<div style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);color:#888;padding:3px 10px;border-radius:20px;font-size:9px;font-weight:700;">' + dna.business_state + '</div>' : '') +
           '</div>' +
         '</div>' +
       '</div>' +
-    '</div>';
-
-  // ── Investment Portfolio card ──
-  var portfolioCard =
-    '<div style="background:rgba(19,19,19,0.8);backdrop-filter:blur(12px);border:1px solid rgba(255,255,255,0.08);border-radius:16px;padding:18px;margin-bottom:12px;">' +
-      '<div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:12px;">' +
-        '<div style="font-size:10px;letter-spacing:2px;color:#F59E0B;font-weight:700;line-height:1.5;">INVESTMENT<br>PORTFOLIO</div>' +
-        '<div style="background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.3);color:#22c55e;padding:3px 10px;border-radius:20px;font-size:8px;font-weight:700;text-align:center;line-height:1.5;">⚡ ALPACA SYNC<br>/ WIRED</div>' +
-      '</div>' +
-      '<div style="margin-bottom:6px;">' +
-        '<div style="font-size:9px;color:#555;letter-spacing:1px;margin-bottom:2px;">MARKET HOLDINGS</div>' +
-        '<div style="display:flex;align-items:baseline;gap:12px;">' +
-          '<div style="font-size:24px;font-weight:900;color:#E5E5E5;" id="mysal-portfolio-val">$1,240,500.00</div>' +
-          '<div style="font-size:14px;font-weight:700;color:#22c55e;">+4.0%</div>' +
-        '</div>' +
-      '</div>' +
-      '<div style="height:2px;background:linear-gradient(90deg,#F59E0B,#22c55e);border-radius:2px;margin:10px 0;"></div>' +
-      '<div style="font-size:9px;color:#555;letter-spacing:1px;margin-bottom:10px;">STOCKS &amp; BONDS CONSOLIDATED</div>' +
-      '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;">' +
-        '<div style="background:rgba(245,158,11,0.06);border:1px solid rgba(245,158,11,0.15);border-radius:8px;padding:8px;text-align:center;">' +
-          '<div style="font-size:10px;font-weight:700;color:#F59E0B;">Annuities</div>' +
-          '<div style="font-size:8px;color:#555;margin-top:2px;">Fixed Income</div>' +
-        '</div>' +
-        '<div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:8px;padding:8px;text-align:center;">' +
-          '<div style="font-size:10px;font-weight:700;color:#888;">Equities</div>' +
-          '<div style="font-size:8px;color:#555;margin-top:2px;">Stocks &amp; ETFs</div>' +
-        '</div>' +
-        '<div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:8px;padding:8px;text-align:center;">' +
-          '<div style="font-size:10px;font-weight:700;color:#888;">Real Estate</div>' +
-          '<div style="font-size:8px;color:#555;margin-top:2px;">Holdings</div>' +
-        '</div>' +
+      '<div style="display:flex;gap:8px;">' +
+        '<button data-testid="mysal-edit-dna" onclick="localStorage.removeItem(\'sal_dna_onboarding_done\');showDNAOnboarding()" style="flex:1;background:rgba(212,175,55,0.08);border:1px solid rgba(212,175,55,0.2);color:#D4AF37;padding:8px;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer;letter-spacing:0.5px;">Edit Business DNA</button>' +
+        '<button data-testid="mysal-view-plans" onclick="navigate(\'pricing\')" style="flex:1;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);color:#888;padding:8px;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer;">View Plans</button>' +
       '</div>' +
     '</div>';
 
-  // ── Real Estate Holdings card ──
-  var reRows = [
-    {label:'Investment Properties', id:'re-props', val:'12', icon:'🏢'},
-    {label:'Land Assets',           id:'re-land',  val:'4',  icon:'🌿'},
-    {label:'Contractor Bids',       id:'re-bids',  val:'3',  icon:'🔨'},
-    {label:'New Deal Targets',      id:'re-deals', val:'0',  icon:'🎯'}
+  // ── SECTION 2: Quick Actions ──
+  var FAVORITES = [
+    {icon:'fa-search',label:'Search',action:"setView('chat');switchVertical('search',null)"},
+    {icon:'fa-code',label:'Builder',action:"navigate('studio')"},
+    {icon:'fa-plug',label:'GHL Hub',action:"setView('ghl-bridge')"},
+    {icon:'fa-briefcase',label:'Career',action:"navigate('career')"},
+    {icon:'fa-home',label:'Real Estate',action:"setView('chat');switchVertical('realestate',null)"},
+    {icon:'fa-chart-line',label:'Finance',action:"setView('chat');switchVertical('finance',null)"},
+    {icon:'fa-layer-group',label:'Cards',action:"navigate('cookin-cards')"},
+    {icon:'fa-cog',label:'Settings',action:"navigate('connectors')"}
   ];
-  var reCard =
-    '<div style="background:rgba(19,19,19,0.8);backdrop-filter:blur(12px);border:1px solid rgba(255,255,255,0.08);border-radius:16px;padding:18px;margin-bottom:12px;">' +
-      '<div style="font-size:10px;letter-spacing:2px;color:#F59E0B;font-weight:700;margin-bottom:14px;">REAL ESTATE HOLDINGS</div>' +
-      reRows.map(function(r) {
-        return '<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid rgba(255,255,255,0.04);">' +
-          '<div style="display:flex;align-items:center;gap:10px;">' +
-            '<div style="width:28px;height:28px;background:rgba(245,158,11,0.08);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:13px;">' + r.icon + '</div>' +
-            '<span style="font-size:12px;color:#888;">' + r.label + '</span>' +
-          '</div>' +
-          '<span style="font-size:18px;font-weight:900;color:#E5E5E5;" id="' + r.id + '">' + r.val + '</span>' +
-        '</div>';
-      }).join('') +
-      '<button onclick="setView(\'chat\');switchVertical(\'realestate\',null)" style="width:100%;margin-top:12px;background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.2);color:#F59E0B;padding:10px;border-radius:10px;font-size:11px;font-weight:700;cursor:pointer;">View Real Estate Intelligence →</button>' +
+  var favRow = FAVORITES.map(function(f){
+    return '<div onclick="'+f.action+'" style="display:flex;flex-direction:column;align-items:center;gap:6px;min-width:64px;cursor:pointer;padding:8px 4px;">' +
+      '<div style="width:44px;height:44px;background:rgba(212,175,55,0.08);border:1px solid rgba(212,175,55,0.15);border-radius:12px;display:flex;align-items:center;justify-content:center;"><i class="fas '+f.icon+'" style="color:#D4AF37;font-size:16px;"></i></div>' +
+      '<span style="font-size:9px;color:#666;font-weight:600;letter-spacing:0.5px;">'+f.label+'</span>' +
+    '</div>';
+  }).join('');
+  var quickActions =
+    '<div style="padding:16px 18px 12px;">' +
+      '<div style="font-size:10px;letter-spacing:2px;color:#D4AF37;font-weight:700;margin-bottom:12px;">QUICK ACTIONS</div>' +
+      '<div style="display:flex;overflow-x:auto;gap:4px;padding-bottom:8px;-webkit-overflow-scrolling:touch;" data-testid="mysal-quick-actions">' + favRow + '</div>' +
     '</div>';
 
-  // ── Pillars of Intelligence ──
-  var iconMap = {finance:'📈',sports:'🏀',real_estate:'🏠',medical:'🏥',tech:'💻',news:'📰',cookin_cards:'🃏',business:'🏢',search:'🔍'};
-  var subMap = {finance:'Market Analysis',sports:'Live Scores & Stats',real_estate:'Orange County Partnerships',medical:'Clinical Research',tech:'Quantum Computing',news:'Global Headlines',cookin_cards:'Card Markets',business:'Operations Center',search:'Deep Web Search'};
+  // ── SECTION 3: Business Overview (GHL + Credits) ──
+  var bizOverview =
+    '<div style="padding:0 18px 12px;">' +
+      '<div style="background:rgba(19,19,19,0.8);backdrop-filter:blur(12px);border:1px solid rgba(255,255,255,0.08);border-radius:16px;padding:18px;margin-bottom:12px;">' +
+        '<div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:14px;">' +
+          '<div style="font-size:10px;letter-spacing:2px;color:#D4AF37;font-weight:700;">BUSINESS OVERVIEW</div>' +
+          '<button onclick="setView(\'ghl-bridge\')" style="background:rgba(212,175,55,0.08);border:1px solid rgba(212,175,55,0.25);color:#D4AF37;padding:4px 10px;border-radius:8px;font-size:9px;font-weight:700;cursor:pointer;">GHL HUB</button>' +
+        '</div>' +
+        '<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px;" data-testid="mysal-biz-overview">' +
+          '<div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:10px;padding:12px;">' +
+            '<div style="font-size:9px;color:#555;letter-spacing:1px;margin-bottom:4px;">GHL CONTACTS</div>' +
+            '<div style="font-size:22px;font-weight:900;color:#E5E5E5;" id="ghl-contacts">--</div>' +
+          '</div>' +
+          '<div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:10px;padding:12px;">' +
+            '<div style="font-size:9px;color:#555;letter-spacing:1px;margin-bottom:4px;">PIPELINES</div>' +
+            '<div style="font-size:22px;font-weight:900;color:#E5E5E5;" id="ghl-leads">--</div>' +
+          '</div>' +
+          '<div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:10px;padding:12px;">' +
+            '<div style="font-size:9px;color:#555;letter-spacing:1px;margin-bottom:4px;">TIER</div>' +
+            '<div style="font-size:18px;font-weight:900;color:#D4AF37;">TEAMS</div>' +
+          '</div>' +
+          '<div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:10px;padding:12px;">' +
+            '<div style="font-size:9px;color:#555;letter-spacing:1px;margin-bottom:4px;">BILLING</div>' +
+            '<div onclick="navigate(\'pricing\')" style="font-size:14px;font-weight:700;color:#22c55e;cursor:pointer;">Manage</div>' +
+          '</div>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+
+  // ── SECTION 4: Activity (Recent searches + builds) ──
+  var activityCard =
+    '<div style="padding:0 18px 12px;">' +
+      '<div style="background:rgba(19,19,19,0.8);backdrop-filter:blur(12px);border:1px solid rgba(255,255,255,0.08);border-radius:16px;padding:18px;margin-bottom:12px;">' +
+        '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">' +
+          '<div style="font-size:10px;letter-spacing:2px;color:#D4AF37;font-weight:700;">RECENT ACTIVITY</div>' +
+          '<div style="font-size:9px;color:#555;font-weight:600;">' + totalSearches + ' searches</div>' +
+        '</div>' +
+        (searches.length ? searches.map(function(s) {
+          return '<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid rgba(255,255,255,0.04);cursor:pointer;" onclick="document.getElementById(\'promptInput\').value=\'' + escapeAttr(s.content.slice(0,60)) + '\';setView(\'chat\')">' +
+            '<div style="width:28px;height:28px;background:rgba(212,175,55,0.08);border-radius:8px;display:flex;align-items:center;justify-content:center;"><i class="fas fa-search" style="font-size:11px;color:#D4AF37;"></i></div>' +
+            '<div style="flex:1;font-size:12px;color:#888;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + escapeHtml(s.content.slice(0,52)) + (s.content.length > 52 ? '...' : '') + '</div>' +
+          '</div>';
+        }).join('') : '<div style="font-size:12px;color:#444;text-align:center;padding:16px 0;">Start searching to build your insight history</div>') +
+      '</div>' +
+    '</div>';
+
+  // ── SECTION 5: Pillars of Intelligence ──
+  var iconMap = {ai_chat:'fa-robot',builder:'fa-code',formation:'fa-building',lending:'fa-hand-holding-usd',realestate:'fa-home',trading:'fa-chart-line',crm:'fa-bullhorn',career:'fa-briefcase',cards:'fa-layer-group',creative:'fa-palette',finance:'fa-chart-line',sports:'fa-football-ball',real_estate:'fa-home',medical:'fa-heartbeat',tech:'fa-laptop-code',news:'fa-newspaper',cookin_cards:'fa-layer-group',business:'fa-building',search:'fa-search'};
+  var vertMap = {ai_chat:'search',builder:'studio',formation:'launchpad',lending:'chat',realestate:'realestate',trading:'finance',crm:'ghl-bridge',career:'career',cards:'cookin-cards',creative:'social',finance:'finance',sports:'sports',real_estate:'realestate',medical:'medical',tech:'tech',news:'news',cookin_cards:'cookin-cards',business:'launchpad',search:'search'};
   var pillarsCard =
-    '<div style="background:rgba(19,19,19,0.8);backdrop-filter:blur(12px);border:1px solid rgba(255,255,255,0.08);border-radius:16px;padding:18px;margin-bottom:12px;">' +
-      '<div style="font-size:10px;letter-spacing:2px;color:#F59E0B;font-weight:700;margin-bottom:14px;">PILLARS OF INTELLIGENCE</div>' +
-      (favTeams ? '<div style="font-size:9px;color:#555;letter-spacing:1px;margin-bottom:6px;">FAVORITE TEAMS</div><div style="font-size:12px;color:#888;margin-bottom:12px;">' + favTeams + '</div>' : '') +
-      dnaArr.map(function(d) {
-        return '<div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid rgba(255,255,255,0.04);cursor:pointer;" onclick="switchVertical(\'' + d + '\',null)">' +
-          '<div style="width:32px;height:32px;background:rgba(245,158,11,0.08);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:16px;">' + (iconMap[d]||'⚡') + '</div>' +
-          '<div style="flex:1;">' +
-            '<div style="font-size:12px;font-weight:700;color:#E5E5E5;text-transform:capitalize;">' + d.replace(/_/g,' ') + '</div>' +
-            '<div style="font-size:10px;color:#555;margin-top:1px;">' + (subMap[d]||'Intelligence') + '</div>' +
-          '</div>' +
-          '<svg viewBox="0 0 24 24" fill="none" stroke="#333" stroke-width="2" width="14" height="14"><polyline points="9 18 15 12 9 6"/></svg>' +
-        '</div>';
-      }).join('') +
-      (dnaArr.length === 0 ? '<div style="font-size:12px;color:#444;text-align:center;padding:16px 0;">Complete DNA setup to personalize your pillars</div>' : '') +
-      '<button onclick="setView(\'chat\');switchVertical(\'search\',null)" style="width:100%;margin-top:12px;background:linear-gradient(135deg,rgba(245,158,11,0.15),rgba(245,158,11,0.05));border:1px solid rgba(245,158,11,0.3);color:#F59E0B;padding:10px;border-radius:10px;font-size:11px;font-weight:700;cursor:pointer;letter-spacing:1px;">ASK SAL ANYTHING →</button>' +
+    '<div style="padding:0 18px 12px;">' +
+      '<div style="background:rgba(19,19,19,0.8);backdrop-filter:blur(12px);border:1px solid rgba(255,255,255,0.08);border-radius:16px;padding:18px;margin-bottom:12px;">' +
+        '<div style="font-size:10px;letter-spacing:2px;color:#D4AF37;font-weight:700;margin-bottom:14px;">YOUR INTELLIGENCE PILLARS</div>' +
+        (favTeams ? '<div style="font-size:9px;color:#555;letter-spacing:1px;margin-bottom:4px;">FAVORITE TEAMS</div><div style="font-size:12px;color:#888;margin-bottom:12px;">' + favTeams + '</div>' : '') +
+        (dnaArr.length ? dnaArr.map(function(d) {
+          var nav = vertMap[d] || 'chat';
+          var clickAction = (nav === 'chat' || nav === 'realestate' || nav === 'finance' || nav === 'sports' || nav === 'medical' || nav === 'tech' || nav === 'news') ?
+            "setView('chat');switchVertical('"+(d==='real_estate'?'realestate':d)+"',null)" : "navigate('"+nav+"')";
+          return '<div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid rgba(255,255,255,0.04);cursor:pointer;" onclick="'+clickAction+'">' +
+            '<div style="width:32px;height:32px;background:rgba(212,175,55,0.08);border-radius:8px;display:flex;align-items:center;justify-content:center;"><i class="fas '+(iconMap[d]||'fa-bolt')+'" style="font-size:14px;color:#D4AF37;"></i></div>' +
+            '<div style="flex:1;">' +
+              '<div style="font-size:12px;font-weight:700;color:#E5E5E5;text-transform:capitalize;">' + d.replace(/_/g,' ') + '</div>' +
+            '</div>' +
+            '<i class="fas fa-chevron-right" style="color:#333;font-size:10px;"></i>' +
+          '</div>';
+        }).join('') : '<div style="font-size:12px;color:#444;text-align:center;padding:16px 0;">Complete DNA setup to personalize your pillars</div>') +
+        '<button onclick="setView(\'chat\');switchVertical(\'search\',null)" style="width:100%;margin-top:12px;background:linear-gradient(135deg,rgba(212,175,55,0.12),rgba(212,175,55,0.04));border:1px solid rgba(212,175,55,0.25);color:#D4AF37;padding:10px;border-radius:10px;font-size:11px;font-weight:700;cursor:pointer;letter-spacing:1px;" data-testid="mysal-ask-sal">ASK SAL ANYTHING</button>' +
+      '</div>' +
     '</div>';
 
-  // ── Saved Laboratory Assets ──
+  // ── Lab Assets ──
   var builderState = sessionStorage.getItem('sal_builder_state') || '';
   var labCard =
-    '<div style="background:rgba(19,19,19,0.8);backdrop-filter:blur(12px);border:1px solid rgba(255,255,255,0.08);border-radius:16px;padding:18px;margin-bottom:12px;">' +
-      '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">' +
-        '<div style="font-size:10px;letter-spacing:2px;color:#F59E0B;font-weight:700;">SAVED LABORATORY ASSETS</div>' +
-        '<button onclick="navigate(\'studio\')" style="background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.2);color:#F59E0B;padding:4px 12px;border-radius:8px;font-size:10px;font-weight:700;cursor:pointer;">+ NEW BUILD</button>' +
-      '</div>' +
-      '<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px;">' +
-        '<div onclick="navigate(\'studio\')" style="aspect-ratio:16/10;background:' + (builderState ? 'rgba(245,158,11,0.07)' : 'rgba(255,255,255,0.03)') + ';border:1px solid ' + (builderState ? 'rgba(245,158,11,0.3)' : 'rgba(255,255,255,0.06)') + ';border-radius:12px;display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;gap:4px;padding:8px;">' +
-          '<div style="font-size:20px;">' + (builderState ? '💻' : '➕') + '</div>' +
-          '<div style="font-size:9px;font-weight:700;color:' + (builderState ? '#F59E0B' : '#444') + ';letter-spacing:1px;">BUILD 01</div>' +
-          (builderState ? '<div style="font-size:8px;color:#555;">Architecture_V2</div>' : '') +
+    '<div style="padding:0 18px 12px;">' +
+      '<div style="background:rgba(19,19,19,0.8);backdrop-filter:blur(12px);border:1px solid rgba(255,255,255,0.08);border-radius:16px;padding:18px;margin-bottom:12px;">' +
+        '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">' +
+          '<div style="font-size:10px;letter-spacing:2px;color:#D4AF37;font-weight:700;">SAVED LABORATORY ASSETS</div>' +
+          '<button onclick="navigate(\'studio\')" style="background:rgba(212,175,55,0.1);border:1px solid rgba(212,175,55,0.2);color:#D4AF37;padding:4px 12px;border-radius:8px;font-size:10px;font-weight:700;cursor:pointer;">+ NEW BUILD</button>' +
         '</div>' +
-        '<div onclick="navigate(\'studio\')" style="aspect-ratio:16/10;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:12px;display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;gap:4px;padding:8px;">' +
-          '<div style="font-size:20px;">➕</div>' +
-          '<div style="font-size:9px;font-weight:700;color:#444;letter-spacing:1px;">BUILD 02</div>' +
-          '<div style="font-size:8px;color:#2a2a2a;">Black_Pavilion</div>' +
+        '<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px;">' +
+          '<div onclick="navigate(\'studio\')" style="aspect-ratio:16/10;background:' + (builderState ? 'rgba(212,175,55,0.07)' : 'rgba(255,255,255,0.03)') + ';border:1px solid ' + (builderState ? 'rgba(212,175,55,0.3)' : 'rgba(255,255,255,0.06)') + ';border-radius:12px;display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;gap:4px;padding:8px;">' +
+            '<i class="fas '+(builderState ? 'fa-laptop-code' : 'fa-plus')+'" style="font-size:20px;color:'+(builderState ? '#D4AF37' : '#444')+';"></i>' +
+            '<div style="font-size:9px;font-weight:700;color:' + (builderState ? '#D4AF37' : '#444') + ';letter-spacing:1px;">BUILD 01</div>' +
+          '</div>' +
+          '<div onclick="navigate(\'studio\')" style="aspect-ratio:16/10;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:12px;display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;gap:4px;padding:8px;">' +
+            '<i class="fas fa-plus" style="font-size:20px;color:#444;"></i>' +
+            '<div style="font-size:9px;font-weight:700;color:#444;letter-spacing:1px;">BUILD 02</div>' +
+          '</div>' +
         '</div>' +
       '</div>' +
-    '</div>';
-
-  // ── Insight Searches ──
-  var insightCard =
-    '<div style="background:rgba(19,19,19,0.8);backdrop-filter:blur(12px);border:1px solid rgba(255,255,255,0.08);border-radius:16px;padding:18px;margin-bottom:12px;">' +
-      '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">' +
-        '<div style="font-size:10px;letter-spacing:2px;color:#F59E0B;font-weight:700;">INSIGHT SEARCHES</div>' +
-        '<div style="background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.3);color:#22c55e;padding:3px 10px;border-radius:20px;font-size:9px;font-weight:700;">TOTAL SAVES ' + totalSearches + '</div>' +
-      '</div>' +
-      (searches.length ? searches.map(function(s) {
-        return '<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid rgba(255,255,255,0.04);cursor:pointer;" onclick="document.getElementById(\'promptInput\').value=\'' + escapeAttr(s.content.slice(0,60)) + '\';setView(\'chat\')">' +
-          '<div style="width:28px;height:28px;background:rgba(255,255,255,0.04);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:12px;">🔍</div>' +
-          '<div style="flex:1;font-size:12px;color:#888;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + escapeHtml(s.content.slice(0,52)) + (s.content.length > 52 ? '…' : '') + '</div>' +
-          '<div style="font-size:10px;color:#333;">↗</div>' +
-        '</div>';
-      }).join('') : '<div style="font-size:12px;color:#444;text-align:center;padding:16px 0;">Start searching to build your insight history</div>') +
     '</div>';
 
   var html =
-    '<div style="background:#080808;min-height:100vh;padding:0 0 80px;">' +
-    heroCard +
-    '<div style="padding:14px 14px 0;">' +
-      ghlCard +
-      portfolioCard +
-      reCard +
-      pillarsCard +
-      labCard +
-      insightCard +
-      '<button onclick="localStorage.removeItem(\'sal_dna\');setView(\'my-sal\')" style="width:100%;background:none;border:1px solid rgba(255,255,255,0.05);color:#2a2a2a;padding:10px;border-radius:10px;font-size:11px;cursor:pointer;margin-bottom:8px;">Reset DNA</button>' +
-    '</div>' +
+    '<div style="background:#080808;min-height:100vh;padding:0 0 80px;" data-testid="mysal-dashboard">' +
+    profileCard +
+    quickActions +
+    bizOverview +
+    activityCard +
+    pillarsCard +
+    labCard +
     '</div>';
 
-  setTimeout(function() { mysalLoadGHL(); mysalLoadPortfolio(); mysalLoadRE(); }, 200);
   return html;
 }
 
@@ -14767,4 +14856,120 @@ async function salStartCheckout(tier) {
 
 // Initialize metering on page load
 setTimeout(initMetering, 500);
+
+// ─── Credit Limit Modal (3 Types per spec) ──────────────────────────────────
+
+var _creditModalOverlay = null;
+
+function showCreditModal(type, data) {
+  // type: 'credits_exhausted' | 'daily_limit' | 'model_upgrade'
+  if (_creditModalOverlay) _creditModalOverlay.remove();
+  data = data || {};
+
+  var overlay = document.createElement('div');
+  overlay.id = 'creditLimitOverlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.88);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;backdrop-filter:blur(6px);';
+  _creditModalOverlay = overlay;
+
+  var content = '';
+
+  if (type === 'credits_exhausted') {
+    var TOPUPS = [{amt:5,label:'$5'},{amt:10,label:'$10'},{amt:25,label:'$25',pop:true},{amt:50,label:'$50'},{amt:60,label:'$60'},{amt:100,label:'$100'},{amt:250,label:'$250'}];
+    var selectedAmt = 25;
+    var grid = TOPUPS.map(function(t) {
+      return '<div onclick="selectTopup('+t.amt+')" data-topup="'+t.amt+'" style="background:'+(t.amt===selectedAmt?'rgba(212,175,55,0.15)':'rgba(255,255,255,0.04)')+';border:1px solid '+(t.amt===selectedAmt?'#D4AF37':'rgba(255,255,255,0.08)')+';border-radius:10px;padding:12px;text-align:center;cursor:pointer;position:relative;">' +
+        (t.pop ? '<div style="position:absolute;top:-6px;right:-4px;background:#D4AF37;color:#080808;font-size:7px;font-weight:900;padding:2px 6px;border-radius:4px;letter-spacing:1px;">POPULAR</div>' : '') +
+        '<div style="font-size:16px;font-weight:900;color:'+(t.amt===selectedAmt?'#D4AF37':'#ccc')+';">'+t.label+'</div>' +
+      '</div>';
+    }).join('');
+
+    content =
+      '<div style="height:3px;background:linear-gradient(90deg,#D4AF37,#8A7129);border-radius:3px 3px 0 0;"></div>' +
+      '<div style="padding:28px;">' +
+        '<div style="text-align:center;">' +
+          '<i class="fas fa-bolt" style="font-size:28px;color:#D4AF37;margin-bottom:12px;"></i>' +
+          '<h2 style="font-size:22px;font-weight:900;color:#fff;margin:0 0 6px;">You\'ve run out of credits</h2>' +
+          '<p style="color:#666;font-size:13px;margin:0 0 20px;">Purchase additional credits to keep using SaintSal Labs, or upgrade your plan for more included monthly credits.</p>' +
+        '</div>' +
+        '<div style="text-align:center;margin-bottom:16px;">' +
+          '<div style="font-size:10px;color:#555;letter-spacing:2px;font-weight:600;">BALANCE</div>' +
+          '<div style="font-size:24px;font-weight:900;color:#ef4444;" data-testid="credit-balance">$'+(data.balance ? (data.balance/100).toFixed(2) : '0.00')+'</div>' +
+        '</div>' +
+        '<div style="font-size:10px;color:#555;letter-spacing:2px;font-weight:600;margin-bottom:10px;">SELECT AMOUNT</div>' +
+        '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:16px;" id="topupGrid">' + grid + '</div>' +
+        '<button data-testid="purchase-credits-btn" onclick="purchaseCredits()" style="width:100%;background:linear-gradient(135deg,#D4AF37,#8A7129);color:#080808;padding:16px;font-size:15px;font-weight:900;border:none;cursor:pointer;border-radius:10px;letter-spacing:1px;">PURCHASE $<span id="topupAmtLabel">25</span> CREDITS</button>' +
+        '<button onclick="closeCreditModal();navigate(\'pricing\')" style="width:100%;background:none;border:1px solid rgba(255,255,255,0.06);color:#888;padding:12px;font-size:12px;border-radius:10px;cursor:pointer;margin-top:8px;">Or upgrade your plan for more credits</button>' +
+        '<div style="text-align:center;font-size:10px;color:#333;margin-top:12px;">Credits never expire. Powered by Stripe.</div>' +
+      '</div>';
+
+  } else if (type === 'daily_limit') {
+    var limit = data.limit || 5;
+    var tier = data.tier || 'Free';
+    content =
+      '<div style="padding:28px;text-align:center;">' +
+        '<i class="fas fa-lock" style="font-size:28px;color:#F59E0B;margin-bottom:12px;"></i>' +
+        '<h2 style="font-size:22px;font-weight:900;color:#fff;margin:0 0 6px;">Daily message limit reached</h2>' +
+        '<p style="color:#666;font-size:13px;margin:0 0 24px;">Your '+tier+' plan includes '+limit+' messages per day. Upgrade for unlimited messages, or wait for your daily reset.</p>' +
+        '<button data-testid="upgrade-unlimited-btn" onclick="closeCreditModal();salStartCheckout(\'starter\')" style="width:100%;background:linear-gradient(135deg,#D4AF37,#8A7129);color:#080808;padding:16px;font-size:15px;font-weight:900;border:none;cursor:pointer;border-radius:10px;letter-spacing:1px;">UPGRADE FOR UNLIMITED MESSAGES</button>' +
+        '<button onclick="closeCreditModal()" style="width:100%;background:none;border:1px solid rgba(255,255,255,0.06);color:#555;padding:12px;font-size:12px;border-radius:10px;cursor:pointer;margin-top:8px;">I\'ll wait for my daily reset</button>' +
+      '</div>';
+
+  } else if (type === 'model_upgrade') {
+    var reqTier = data.required_tier || 'pro';
+    var reqPrice = data.required_price || 97;
+    var reqName = data.required_tier_name || 'Pro';
+    var modelName = data.model_name || 'SAL Max';
+    content =
+      '<div style="padding:28px;text-align:center;">' +
+        '<i class="fas fa-rocket" style="font-size:28px;color:#8B5CF6;margin-bottom:12px;"></i>' +
+        '<h2 style="font-size:22px;font-weight:900;color:#fff;margin:0 0 6px;">Upgrade to use this model</h2>' +
+        '<p style="color:#666;font-size:13px;margin:0 0 24px;">'+modelName+' requires a '+reqName+' plan or higher. Upgrade to unlock the most powerful models.</p>' +
+        '<button data-testid="upgrade-model-btn" onclick="closeCreditModal();salStartCheckout(\''+reqTier+'\')" style="width:100%;background:linear-gradient(135deg,#D4AF37,#8A7129);color:#080808;padding:16px;font-size:15px;font-weight:900;border:none;cursor:pointer;border-radius:10px;letter-spacing:1px;">UPGRADE TO '+reqName.toUpperCase()+' — $'+reqPrice+'/mo</button>' +
+        '<button onclick="closeCreditModal()" style="width:100%;background:none;border:1px solid rgba(255,255,255,0.06);color:#555;padding:12px;font-size:12px;border-radius:10px;cursor:pointer;margin-top:8px;">Continue with current model</button>' +
+      '</div>';
+  }
+
+  overlay.innerHTML = '<div style="background:#0a0a0a;border:1px solid rgba(212,175,55,0.15);max-width:440px;width:100%;border-radius:16px;overflow:hidden;box-shadow:0 24px 48px rgba(0,0,0,0.5);">' + content + '</div>';
+  overlay.onclick = function(e) { if (e.target === overlay) closeCreditModal(); };
+  document.body.appendChild(overlay);
+}
+
+function closeCreditModal() {
+  if (_creditModalOverlay) { _creditModalOverlay.remove(); _creditModalOverlay = null; }
+}
+
+window._selectedTopup = 25;
+window.selectTopup = function(amt) {
+  window._selectedTopup = amt;
+  var grid = document.getElementById('topupGrid');
+  if (grid) {
+    grid.querySelectorAll('[data-topup]').forEach(function(el) {
+      var isSelected = parseInt(el.getAttribute('data-topup')) === amt;
+      el.style.background = isSelected ? 'rgba(212,175,55,0.15)' : 'rgba(255,255,255,0.04)';
+      el.style.borderColor = isSelected ? '#D4AF37' : 'rgba(255,255,255,0.08)';
+      el.querySelector('div').style.color = isSelected ? '#D4AF37' : '#ccc';
+    });
+  }
+  var label = document.getElementById('topupAmtLabel');
+  if (label) label.textContent = amt;
+};
+
+window.purchaseCredits = async function() {
+  var amt = window._selectedTopup || 25;
+  try {
+    var resp = await fetch(API + '/api/billing/credit-topup', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({amount: amt})
+    });
+    var data = await resp.json();
+    if (data.url) {
+      closeCreditModal();
+      window.open(data.url, '_blank');
+    } else {
+      showToast('Checkout error: ' + (data.error || 'Unknown'), 'error');
+    }
+  } catch(e) {
+    showToast('Checkout failed: ' + e.message, 'error');
+  }
+};
 
