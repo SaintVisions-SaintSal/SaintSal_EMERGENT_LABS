@@ -14667,7 +14667,7 @@ function showTierGate(feature, requiredTier, message) {
     var h = '';
     tierList.forEach(function(t) {
       var isRequired = t.name === requiredTier || (!requiredTier && t.id === 'pro');
-      h += '<div style="flex:1;padding:10px;border-radius:8px;border:1px solid ' + (isRequired ? t.color : 'var(--border-subtle,#333)') + ';background:' + (isRequired ? t.color + '11' : 'transparent') + ';text-align:center;">';
+      h += '<div onclick="salStartCheckout(\'' + t.id + '\')" style="flex:1;padding:10px;border-radius:8px;border:1px solid ' + (isRequired ? t.color : 'var(--border-subtle,#333)') + ';background:' + (isRequired ? t.color + '11' : 'transparent') + ';text-align:center;cursor:pointer;transition:transform 0.15s;" onmouseenter="this.style.transform=\'scale(1.03)\'" onmouseleave="this.style.transform=\'scale(1)\'">';
       h += '<div style="font-size:11px;font-weight:700;color:' + t.color + ';">' + t.name + '</div>';
       h += '<div style="font-size:16px;font-weight:900;color:var(--text-primary);margin-top:2px;">' + t.price + '</div>';
       h += '<div style="font-size:9px;color:var(--text-muted);">/month</div>';
@@ -14731,6 +14731,37 @@ async function salLogUsage(action, computeMinutes, modelUsed) {
     return data;
   } catch(e) {
     console.warn('Usage log failed:', e);
+  }
+}
+
+// ─── Stripe Checkout Integration ─────────────────────────────────────────────
+
+var salStripePrices = {
+  starter: { monthly: 'price_1T5bkAL47U80vDLAaChP4Hqg', annual: 'price_1T6dHNL47U80vDLAPgfsUmtO' },
+  pro:     { monthly: 'price_1T5bkBL47U80vDLALiVDkOgb', annual: 'price_1T6dHNL47U80vDLAHYxorUNk' },
+  teams:   { monthly: 'price_1T5bkCL47U80vDLANsCa647K', annual: 'price_1T6dHNL47U80vDLAqTTV84lL' },
+  enterprise: { monthly: 'price_1T5bkDL47U80vDLANXWF33A7', annual: 'price_1T6dHOL47U80vDLARSODO7b1' }
+};
+
+async function salStartCheckout(tier) {
+  // If no tier specified, go to pricing page
+  if (!tier) { closeTierGate(); navigate('pricing'); return; }
+  var priceId = (salStripePrices[tier] || {}).monthly;
+  if (!priceId) { closeTierGate(); navigate('pricing'); return; }
+  try {
+    var resp = await fetch(API + '/api/checkout/create-session', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ price_id: priceId, vertical: 'general' })
+    });
+    var data = await resp.json();
+    if (data.url) {
+      closeTierGate();
+      window.open(data.url, '_blank');
+    } else {
+      showToast('Checkout error: ' + (data.error || 'Unknown'), 'error');
+    }
+  } catch(e) {
+    showToast('Checkout failed: ' + e.message, 'error');
   }
 }
 
