@@ -6444,10 +6444,27 @@ class AuthMagicLink(BaseModel):
     email: str
 
 
+
+async def _admin_confirm_email(user_id: str):
+    """Force-confirm a user's email via Supabase Admin API."""
+    if not SUPABASE_URL or not SUPABASE_SERVICE_KEY:
+        return False
+    try:
+        async with httpx.AsyncClient(timeout=10) as hc:
+            resp = await hc.put(
+                f"{SUPABASE_URL}/auth/v1/admin/users/{user_id}",
+                headers={"apikey": SUPABASE_SERVICE_KEY, "Authorization": f"Bearer {SUPABASE_SERVICE_KEY}", "Content-Type": "application/json"},
+                json={"email_confirm": True}
+            )
+            return resp.status_code == 200
+    except Exception as e:
+        print(f"[Auth] Admin confirm failed: {e}")
+        return False
+
 @limiter.limit("5/minute")
 @app.post("/api/auth/signup")
 async def auth_signup(request: Request, data: AuthSignup):
-    """Register a new user with SaintSal™ Labs."""
+    """Register a new user with SaintSal Labs."""
     if not supabase:
         return JSONResponse({"error": "Auth service not configured"}, status_code=503)
     try:
@@ -6463,6 +6480,32 @@ async def auth_signup(request: Request, data: AuthSignup):
             }
         })
         if result.user:
+            uid = str(result.user.id)
+
+            # Auto-confirm email via admin API so user can sign in immediately
+            if not result.user.email_confirmed_at:
+                confirmed = await _admin_confirm_email(uid)
+                print(f"[Auth] Auto-confirm for {data.email}: {'OK' if confirmed else 'FAILED'}")
+
+            # Now sign in to get a session
+            session_data = None
+            if result.session:
+                session_data = {
+                    "access_token": result.session.access_token,
+                    "refresh_token": result.session.refresh_token,
+                }
+            else:
+                # Email was just confirmed, sign in now
+                try:
+                    login_result = supabase.auth.sign_in_with_password({"email": data.email, "password": data.password})
+                    if login_result.session:
+                        session_data = {
+                            "access_token": login_result.session.access_token,
+                            "refresh_token": login_result.session.refresh_token,
+                        }
+                except Exception as login_err:
+                    print(f"[Auth] Post-confirm login failed: {login_err}")
+
             # Send welcome email via Resend
             if RESEND_API_KEY and data.email:
                 try:
@@ -6495,18 +6538,16 @@ async def auth_signup(request: Request, data: AuthSignup):
                         )
                 except Exception as email_err:
                     print(f"[Resend] Welcome email failed: {email_err}")
+
             return {
                 "success": True,
                 "user": {
-                    "id": str(result.user.id),
+                    "id": uid,
                     "email": result.user.email,
-                    "email_confirmed": result.user.email_confirmed_at is not None,
+                    "email_confirmed": True,
                 },
-                "session": {
-                    "access_token": result.session.access_token if result.session else None,
-                    "refresh_token": result.session.refresh_token if result.session else None,
-                } if result.session else None,
-                "message": "Check your email to confirm your SaintSal\u2122 Labs account" if not result.session else "Welcome to SaintSal\u2122 Labs"
+                "session": session_data,
+                "message": "Welcome to SaintSal\u2122 Labs"
             }
         return JSONResponse({"error": "Signup failed"}, status_code=400)
     except Exception as e:
@@ -6552,12 +6593,9 @@ async def _build_login_response(user_obj, session_obj) -> dict:
 
 @app.post("/api/auth/login")
 async def auth_login(data: AuthLogin):
-    """Login with email and password. Admin emails are auto-confirmed if needed."""
+    """Login with email and password. Unconfirmed emails are auto-confirmed."""
     if not supabase:
         return JSONResponse({"error": "Auth service not configured"}, status_code=503)
-
-    _admin_list = json.loads(os.environ.get("ADMIN_EMAILS", '["ryan@cookin.io","ryan@hacpglobal.ai","cap@hacpglobal.ai","laliecapatosto86@gmail.com","laliecapatosto96@gmail.com"]'))
-    is_admin_email = data.email.lower() in [e.lower() for e in _admin_list]
 
     try:
         result = supabase.auth.sign_in_with_password({
@@ -6572,12 +6610,11 @@ async def auth_login(data: AuthLogin):
         error_msg = str(e)
         error_lower = error_msg.lower()
 
-        # ── Auto-confirm admin emails ──────────────────────────────────────────
-        # If admin email fails with "not confirmed", confirm via service role and retry
-        if is_admin_email and ("not confirmed" in error_lower or "email" in error_lower):
+        # ── Auto-confirm unconfirmed emails and retry ──
+        if "not confirmed" in error_lower or "email_not_confirmed" in error_lower:
             try:
+                # Find the user by email via admin API
                 async with httpx.AsyncClient(timeout=15) as hc:
-                    # Find the user in Supabase
                     search_resp = await hc.get(
                         f"{SUPABASE_URL}/auth/v1/admin/users",
                         headers={"apikey": SUPABASE_SERVICE_KEY, "Authorization": f"Bearer {SUPABASE_SERVICE_KEY}"},
@@ -6596,16 +6633,12 @@ async def auth_login(data: AuthLogin):
                             # Retry sign in
                             result2 = supabase.auth.sign_in_with_password({"email": data.email, "password": data.password})
                             if result2.user and result2.session:
-                                print(f"[Auth] Admin email auto-confirmed and signed in: {data.email}")
+                                print(f"[Auth] Auto-confirmed and signed in: {data.email}")
                                 return await _build_login_response(result2.user, result2.session)
             except Exception as confirm_err:
-                print(f"[Auth] Admin auto-confirm failed: {confirm_err}")
-        # ── End auto-confirm ───────────────────────────────────────────────────
+                print(f"[Auth] Auto-confirm on login failed: {confirm_err}")
+            return JSONResponse({"error": "Could not verify your email. Please try again or use Magic Link."}, status_code=401)
 
-        if "not confirmed" in error_lower or "email_not_confirmed" in error_lower:
-            return JSONResponse({
-                "error": "Your email isn't verified yet. Check your inbox or use the Magic Link option to sign in instantly."
-            }, status_code=401)
         if "invalid" in error_lower or "credentials" in error_lower or "wrong" in error_lower:
             return JSONResponse({"error": "Invalid email or password"}, status_code=401)
         return JSONResponse({"error": error_msg}, status_code=400)
