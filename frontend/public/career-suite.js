@@ -304,15 +304,15 @@ function csTracker() {
 function csLoadTracker() {
   csState.trackerLoading = true;
   renderCareerSuite();
-  fetch(CS_API + '/api/career/tracker/all').then(function(r) { return r.json(); }).then(function(data) {
-    csState.trackerJobs = data.kanban || { wishlist: [], applied: [], interview: [], offer: [], rejected: [] };
+  fetch(CS_API + '/api/career/v2/tracker').then(function(r) { return r.json(); }).then(function(data) {
+    csState.trackerJobs = data.kanban || { wishlist: [], applied: [], phone_screen: [], interview: [], offer: [], accepted: [], rejected: [] };
     csState.trackerLoading = false;
     renderCareerSuite();
   }).catch(function() { csState.trackerLoading = false; renderCareerSuite(); });
 }
 
 function csUpdateJobStatus(jobId, status) {
-  fetch(CS_API + '/api/career/tracker/' + jobId + '/status', {
+  fetch(CS_API + '/api/career/v2/tracker/' + jobId, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ status: status })
@@ -324,11 +324,38 @@ function csQuickAdd() {
   var c = document.getElementById('csTrackCompany');
   var u = document.getElementById('csTrackUrl');
   if (!t || !t.value.trim()) return;
-  fetch(CS_API + '/api/career/tracker/add', {
+  fetch(CS_API + '/api/career/v2/tracker', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ job_title: t.value.trim(), company: c ? c.value.trim() : '', url: u ? u.value.trim() : '', status: 'wishlist' })
-  }).then(function() { csLoadTracker(); });
+    body: JSON.stringify({ job_title: t.value.trim(), company_name: c ? c.value.trim() : '', job_url: u ? u.value.trim() : '', status: 'wishlist' })
+  }).then(function() { if(t) t.value=''; if(c) c.value=''; if(u) u.value=''; csLoadTracker(); });
+}
+
+function csDeleteJob(jobId) {
+  fetch(CS_API + '/api/career/v2/tracker/' + jobId, { method: 'DELETE' }).then(function() { csLoadTracker(); });
+}
+
+function csGetStageGuidance(status, company, role) {
+  var el = document.getElementById('csCoachGuidance');
+  if (el) el.innerHTML = '<div style="text-align:center;padding:20px;"><i class="fas fa-spinner fa-spin" style="color:#D4AF37;"></i> SAL is preparing your guidance...</div>';
+  fetch(CS_API + '/api/career/v2/coach/stage-guidance', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ status: status, company: company, role: role })
+  }).then(function(r) { return r.json(); }).then(function(data) {
+    if (data.coaching && el) {
+      var c = data.coaching;
+      var html = '<div style="background:rgba(212,175,55,0.05);border:1px solid rgba(212,175,55,0.2);border-radius:10px;padding:16px;margin-top:12px;">';
+      html += '<div style="font-size:11px;color:#D4AF37;font-weight:700;letter-spacing:1px;margin-bottom:8px;">SAL GUIDANCE — ' + status.toUpperCase() + '</div>';
+      if (c.guidance) html += '<div style="font-size:12px;color:#ccc;line-height:1.6;margin-bottom:12px;">' + _esc(c.guidance).replace(/\n/g,'<br>') + '</div>';
+      if (c.action_items && c.action_items.length) {
+        html += '<div style="font-size:10px;color:#D4AF37;font-weight:600;margin-bottom:4px;">ACTION ITEMS</div>';
+        c.action_items.forEach(function(a) { html += '<div style="font-size:11px;color:#aaa;padding:3px 0;">• ' + _esc(typeof a === 'string' ? a : a.action || JSON.stringify(a)) + '</div>'; });
+      }
+      if (c.motivation) html += '<div style="font-size:12px;color:#D4AF37;font-style:italic;margin-top:10px;">"' + _esc(c.motivation) + '"</div>';
+      html += '</div>';
+      el.innerHTML = html;
+    }
+  }).catch(function(e) { if(el) el.innerHTML = '<div style="color:#ef4444;font-size:12px;">Error: ' + e.message + '</div>'; });
 }
 
 
