@@ -60,6 +60,8 @@ Build a full-stack business intelligence platform (SaintSal Labs) with 8 intelli
 
 ### Phase 4: Career Suite Supabase Migration + P0 Enhancements (DONE — April 4, 2026)
 - **Full Supabase Migration**: Moved all Career Suite data from in-memory/Mongo to Supabase
+
+## Pending / Upcoming Tasks
 - **Resume PDF/DOCX Export**: Save resume to Supabase, then export via `/api/career/v2/resumes/{id}/export/pdf|docx`
 - **Business DNA Autofill**: Resume builder auto-populates from DNA profile (name, email, phone, company, skills)
 - **Cover Letter PDF/DOCX Export**: Save generated cover letter, then export via `/api/career/v2/cover-letters/{id}/export/pdf|docx`
@@ -69,7 +71,14 @@ Build a full-stack business intelligence platform (SaintSal Labs) with 8 intelli
 - **Job Search**: Wired to `/api/career/jobs/search` with save-to-tracker functionality
 - **Tone Mapping**: Frontend styles (direct/storytelling/technical) mapped to valid Supabase check constraint values
 
-## Pending / Upcoming Tasks
+### Phase 5: Auth Fix (DONE — April 4, 2026)
+- **Root cause**: Supabase email confirmation was blocking users — confirmation emails never arrived via Supabase's default SMTP
+- **Fix**: Auto-confirm all users on signup AND login via Supabase Admin API (`email_confirm: true`)
+- **Signup flow**: Creates user → auto-confirms email → auto-signs-in → returns session token immediately
+- **Login flow**: If "email not confirmed" error, auto-confirms via admin API then retries sign-in
+- **ryan@cookin.io**: Password reset to `SaintSal2024!` via admin API, email confirmed
+- **Topbar Sign In button**: Added prominent gold "Sign In" button in topbar (replaces with avatar after login)
+- **Welcome email**: Sent via Resend after signup
 
 ### P1 — Next Up
 - **Live Data Feeds + Tickers** (Step 4): Personalized data feeds in intelligence verticals based on Business DNA

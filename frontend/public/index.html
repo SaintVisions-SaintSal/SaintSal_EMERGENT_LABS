@@ -292,7 +292,8 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
         <button class="theme-toggle" onclick="toggleTheme()" aria-label="Toggle theme" id="themeToggle">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" id="themeIcon"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
         </button>
-        <div class="topbar-avatar" id="topbarUserAvatar" onclick="onUserProfileClick()">?</div>
+        <button data-testid="topbar-sign-in-btn" id="topbarSignInBtn" onclick="showAuthModal('login')" style="padding:6px 16px;border-radius:8px;border:1px solid var(--accent-gold,#D4A843);background:var(--accent-gold,#D4A843);color:#000;font-weight:700;font-size:12px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;">Sign In</button>
+        <div class="topbar-avatar" id="topbarUserAvatar" onclick="onUserProfileClick()" style="display:none;">?</div>
       </div>
     </div>
 

@@ -3342,6 +3342,8 @@ function updateAuthUI(loggedIn) {
   const profileEmailEl = document.querySelector('.profile-email');
   const profileAvatarLg = document.querySelector('.profile-avatar-lg');
   const computeMeter = document.querySelector('.compute-meter');
+  const signInBtn = document.getElementById('topbarSignInBtn');
+  const topbarAvatar = document.getElementById('topbarUserAvatar');
 
   if (loggedIn && currentUser) {
     const initial = (currentUser.full_name || currentUser.email || 'U').charAt(0).toUpperCase();
@@ -3363,6 +3365,9 @@ function updateAuthUI(loggedIn) {
     if (profileNameEl) profileNameEl.textContent = name;
     if (profileEmailEl) profileEmailEl.textContent = currentUser.email;
     if (profileAvatarLg) profileAvatarLg.textContent = initial;
+    // Toggle topbar: hide sign-in, show avatar
+    if (signInBtn) signInBtn.style.display = 'none';
+    if (topbarAvatar) topbarAvatar.style.display = '';
     
     // Update compute meter
     if (computeMeter && currentUser.credits_remaining !== undefined) {
@@ -3379,6 +3384,9 @@ function updateAuthUI(loggedIn) {
     if (profileNameEl) profileNameEl.textContent = 'Guest';
     if (profileEmailEl) profileEmailEl.textContent = 'Sign in to save your conversations';
     if (profileAvatarLg) profileAvatarLg.textContent = '?';
+    // Toggle topbar: show sign-in, hide avatar
+    if (signInBtn) signInBtn.style.display = '';
+    if (topbarAvatar) topbarAvatar.style.display = 'none';
   }
 
   // Toggle account view sections
