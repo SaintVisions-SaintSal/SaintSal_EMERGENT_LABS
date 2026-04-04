@@ -334,7 +334,7 @@ function csQuickAdd() {
   fetch(CS_API + '/api/career/v2/tracker', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ job_title: t.value.trim(), company_name: c ? c.value.trim() : '', job_url: u ? u.value.trim() : '', status: 'wishlist' })
+    body: JSON.stringify({ job_title: t.value.trim(), company_name: c ? c.value.trim() : '', job_url: u ? u.value.trim() : '', status: 'saved' })
   }).then(function() { if(t) t.value=''; if(c) c.value=''; if(u) u.value=''; csLoadTracker(); });
 }
 

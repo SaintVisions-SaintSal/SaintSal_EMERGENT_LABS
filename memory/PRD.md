@@ -55,34 +55,41 @@ Build a full-stack business intelligence platform (SaintSal Labs) with 8 intelli
   - Credits Exhausted: top-up grid ($5/$10/$25/$50/$60/$100/$250), Stripe checkout
   - Daily Limit Reached: upgrade CTA
   - Model Upgrade Required: tier-specific upgrade pricing
-- **Credit Top-Up Checkout**: `/api/billing/credit-topup` → Stripe one-time payment
+- **Credit Top-Up Checkout**: `/api/billing/credit-topup` -> Stripe one-time payment
 - **GHL Environment Fix**: Both `GHL_API_KEY` and `GHL_PRIVATE_TOKEN` configured
+
+### Phase 4: Career Suite Supabase Migration + P0 Enhancements (DONE — April 4, 2026)
+- **Full Supabase Migration**: Moved all Career Suite data from in-memory/Mongo to Supabase
+- **Resume PDF/DOCX Export**: Save resume to Supabase, then export via `/api/career/v2/resumes/{id}/export/pdf|docx`
+- **Business DNA Autofill**: Resume builder auto-populates from DNA profile (name, email, phone, company, skills)
+- **Cover Letter PDF/DOCX Export**: Save generated cover letter, then export via `/api/career/v2/cover-letters/{id}/export/pdf|docx`
+- **Email Signature Copy HTML**: One-click clipboard copy of full HTML signature
+- **Headshot & Background Upload**: File upload endpoints for user photos (`/api/career/v2/upload/headshot|background`)
+- **Job Tracker Kanban**: Supabase-backed with Saved/Applied/Phone Screen/Rejected columns
+- **Job Search**: Wired to `/api/career/jobs/search` with save-to-tracker functionality
+- **Tone Mapping**: Frontend styles (direct/storytelling/technical) mapped to valid Supabase check constraint values
 
 ## Pending / Upcoming Tasks
 
-### P0 — In Progress
-- None currently blocked
-
 ### P1 — Next Up
+- **Live Data Feeds + Tickers** (Step 4): Personalized data feeds in intelligence verticals based on Business DNA
 - Wire Supabase billing tables (billing_profiles, credit_transactions, usage_logs)
 - Full metering middleware (pre-flight/post-flight on every AI call)
 - Credit balance deduction in real-time
 - Stripe webhook handler for subscription lifecycle + credit purchases
 - GHL contact sync on billing events (tier tags, LTV)
-- Live data feeds + tickers for every intelligence vertical
 - E2E testing of Builder v2 pipeline, Launch Pad wizard, CookinCards
 
 ### P2 — Future
-- Investment portfolio (Alpaca API wire-up)
+- Investment & Lending Portfolios (Step 5, Alpaca API)
 - Deal Analyzer Engine (Fix & Flip + Rental/DSCR calculators)
 - Lending Pipeline (CookinCapital)
 - Saved Searches with alerts
-- Cross-platform sync (saintsallabs.com ↔ saintsal.ai)
+- Cross-platform sync (saintsallabs.com <-> saintsal.ai)
+
+### P3 — Backlog
 - iOS app sync
 - ElevenLabs voice agent
 - White-label / HACP provisioning
-
-### P3 — Backlog
-- iOS app sync, ElevenLabs voice, white-label/HACP
 - Smart Memory System (pgvector semantic search)
 - Custom agent creation for Teams/Enterprise
