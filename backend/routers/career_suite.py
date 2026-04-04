@@ -2,10 +2,11 @@
 All persistence backed by Supabase. PDF/DOCX export. SAL coaching. DNA autofill.
 Column names match the actual Supabase schema exactly.
 """
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Request, UploadFile, File
 from fastapi.responses import JSONResponse, StreamingResponse
-import os, json, uuid, httpx, io
+import os, json, uuid, httpx, io, shutil
 from datetime import datetime, timezone
+from pathlib import Path
 
 router = APIRouter(prefix="/api/career/v2", tags=["career-v2"])
 
@@ -32,6 +33,12 @@ def _clean(rows):
     for r in rows:
         r.pop("id", None)
     return rows
+
+VALID_TONES = {"professional", "executive", "conversational", "creative"}
+def _map_tone(style):
+    if style in VALID_TONES:
+        return style
+    return "professional"
 
 
 # ── 1. CAREER PROFILE ──
@@ -441,7 +448,8 @@ async def get_job_tracker(request: Request):
         for j in jobs:
             j["job_id"] = j.pop("id", "")
         kanban = {}
-        for status in ["wishlist","applied","phone_screen","interview","offer","accepted","rejected"]:
+        # Valid Supabase statuses: saved, applied, phone_screen, rejected
+        for status in ["saved","applied","phone_screen","rejected"]:
             kanban[status] = [j for j in jobs if j.get("status") == status]
         return {"kanban": kanban, "total": len(jobs), "jobs": jobs}
     except Exception as e:
@@ -465,7 +473,7 @@ async def add_to_tracker(request: Request):
         "location": body.get("location", ""),
         "salary_range": body.get("salary_range", ""),
         "remote_type": body.get("remote_type", "onsite"),
-        "status": body.get("status", "wishlist"),
+        "status": body.get("status", "saved"),  # Valid: saved, applied, phone_screen, rejected
         "notes": body.get("notes", ""),
         "job_source": body.get("source", body.get("job_source", "manual")),
         "applied_date": body.get("applied_date"),
@@ -689,7 +697,7 @@ async def save_cover_letter(request: Request):
         "name": body.get("name", "Cover Letter"),
         "body_raw": body.get("content", body.get("body_raw", "")),
         "body_enhanced": body.get("body_enhanced", ""),
-        "tone": body.get("tone", body.get("style", "professional")),
+        "tone": _map_tone(body.get("tone", body.get("style", "professional"))),
         "company_name": body.get("target_company", body.get("company_name", "")),
         "job_title": body.get("target_role", body.get("job_title", "")),
         "saintssal_enhanced": body.get("saintssal_enhanced", False),
@@ -801,3 +809,130 @@ async def list_saved_searches(request: Request):
         return {"saved_searches": data, "total": len(data)}
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)
+
+
+# ── 9. COVER LETTER EXPORT (PDF / DOCX) ──
+
+@router.get("/cover-letters/{cl_id}/export/{fmt}")
+async def export_cover_letter(cl_id: str, fmt: str, request: Request):
+    uid = _user_id(request)
+    sb = _sb()
+    if not sb:
+        return JSONResponse({"error": "Supabase not configured"}, status_code=500)
+    try:
+        r = sb.table("cover_letters").select("*").eq("id", cl_id).eq("user_id", uid).limit(1).execute()
+        if not r.data:
+            return JSONResponse({"error": "Cover letter not found"}, status_code=404)
+        cl = r.data[0]
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+    body_text = cl.get("body_enhanced") or cl.get("body_raw", "")
+    company = cl.get("company_name", "")
+    role = cl.get("job_title", "")
+    name = cl.get("name", "Cover Letter")
+    filename = f"{name.replace(' ', '_')}_{company.replace(' ', '_')}" if company else name.replace(' ', '_')
+
+    if fmt == "pdf":
+        from reportlab.lib.pagesizes import letter
+        from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+        from reportlab.lib.units import inch
+        from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, HRFlowable
+        from reportlab.lib.colors import HexColor
+
+        buf = io.BytesIO()
+        doc = SimpleDocTemplate(buf, pagesize=letter, topMargin=0.8*inch, bottomMargin=0.6*inch,
+                                leftMargin=0.8*inch, rightMargin=0.8*inch)
+        styles = getSampleStyleSheet()
+        gold = HexColor("#D4AF37")
+        title_s = ParagraphStyle("T", parent=styles["Title"], fontSize=16, textColor=HexColor("#1a1a1a"),
+                                 spaceAfter=4, fontName="Helvetica-Bold")
+        sub_s = ParagraphStyle("S", parent=styles["Normal"], fontSize=11, textColor=HexColor("#666"), spaceAfter=12)
+        body_s = ParagraphStyle("B", parent=styles["Normal"], fontSize=11, textColor=HexColor("#222"),
+                                leading=16, spaceAfter=8)
+        footer_s = ParagraphStyle("F", parent=styles["Normal"], fontSize=7, textColor=HexColor("#999"), alignment=1)
+
+        story = []
+        story.append(Paragraph(name, title_s))
+        if company or role:
+            story.append(Paragraph(f"{role} — {company}" if company and role else (role or company), sub_s))
+        story.append(HRFlowable(width="100%", thickness=1, color=gold, spaceAfter=14))
+        for para in body_text.split("\n"):
+            para = para.strip()
+            if para:
+                story.append(Paragraph(para, body_s))
+        story.append(Spacer(1, 30))
+        story.append(HRFlowable(width="100%", thickness=0.5, color=HexColor("#ccc"), spaceAfter=6))
+        story.append(Paragraph("Generated by SaintSal Labs | saintsallabs.com", footer_s))
+        doc.build(story)
+        buf.seek(0)
+        return StreamingResponse(buf, media_type="application/pdf",
+                                 headers={"Content-Disposition": f'attachment; filename="{filename}.pdf"'})
+
+    elif fmt == "docx":
+        from docx import Document
+        from docx.shared import Pt, RGBColor
+        from docx.enum.text import WD_ALIGN_PARAGRAPH
+
+        doc = Document()
+        doc.styles["Normal"].font.size = Pt(11)
+        p = doc.add_heading(name, level=0)
+        p.alignment = WD_ALIGN_PARAGRAPH.LEFT
+        if company or role:
+            doc.add_paragraph(f"{role} — {company}" if company and role else (role or company))
+        for para in body_text.split("\n"):
+            para = para.strip()
+            if para:
+                doc.add_paragraph(para)
+        p = doc.add_paragraph("\nGenerated by SaintSal Labs | saintsallabs.com")
+        p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        for run in p.runs:
+            run.font.size = Pt(7)
+            run.font.color.rgb = RGBColor(0x99, 0x99, 0x99)
+        buf = io.BytesIO()
+        doc.save(buf)
+        buf.seek(0)
+        return StreamingResponse(buf,
+            media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            headers={"Content-Disposition": f'attachment; filename="{filename}.docx"'})
+
+    return JSONResponse({"error": "Format must be 'pdf' or 'docx'"}, status_code=400)
+
+
+# ── 10. FILE UPLOADS (Headshot / Background) ──
+
+UPLOAD_DIR = Path("/app/backend/media_uploads/career")
+UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+
+@router.post("/upload/headshot")
+async def upload_headshot(file: UploadFile = File(...)):
+    ext = Path(file.filename or "img.jpg").suffix.lower()
+    if ext not in (".jpg", ".jpeg", ".png", ".webp"):
+        return JSONResponse({"error": "Only JPG/PNG/WEBP allowed"}, status_code=400)
+    fid = str(uuid.uuid4()) + ext
+    dest = UPLOAD_DIR / fid
+    with open(dest, "wb") as f:
+        shutil.copyfileobj(file.file, f)
+    url = f"/api/career/v2/uploads/{fid}"
+    return {"success": True, "url": url, "file_id": fid}
+
+@router.post("/upload/background")
+async def upload_background(file: UploadFile = File(...)):
+    ext = Path(file.filename or "img.jpg").suffix.lower()
+    if ext not in (".jpg", ".jpeg", ".png", ".webp"):
+        return JSONResponse({"error": "Only JPG/PNG/WEBP allowed"}, status_code=400)
+    fid = str(uuid.uuid4()) + ext
+    dest = UPLOAD_DIR / fid
+    with open(dest, "wb") as f:
+        shutil.copyfileobj(file.file, f)
+    url = f"/api/career/v2/uploads/{fid}"
+    return {"success": True, "url": url, "file_id": fid}
+
+@router.get("/uploads/{file_id}")
+async def serve_career_upload(file_id: str):
+    fpath = UPLOAD_DIR / file_id
+    if not fpath.exists():
+        return JSONResponse({"error": "File not found"}, status_code=404)
+    ext = fpath.suffix.lower()
+    ct = {"jpg": "image/jpeg", "jpeg": "image/jpeg", "png": "image/png", "webp": "image/webp"}.get(ext.lstrip("."), "application/octet-stream")
+    return StreamingResponse(open(fpath, "rb"), media_type=ct)

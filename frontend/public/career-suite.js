@@ -17,6 +17,11 @@ var csState = {
   resumeData: { full_name: '', email: '', phone: '', location: '', title: '', summary: '', experience: '', education: '', skills: '', linkedin: '', website: '' },
   resumeEnhanced: null,
   resumeLoading: false,
+  resumeId: null,
+  resumeSaving: false,
+  dnaLoaded: false,
+  headshotUrl: '',
+  backgroundUrl: '',
   // Digital Cards
   cardData: { name: '', title: '', company: '', email: '', phone: '', website: '', linkedin: '', tagline: '', accent_color: '#D4A843', avatar_b64: '', banner_b64: '', instagram: '', twitter: '', facebook: '', tiktok: '', github: '', address: '' },
   cardPreview: null,
@@ -39,11 +44,13 @@ var csState = {
   intelResult: null,
   intelLoading: false,
   // Job Tracker
-  trackerJobs: { wishlist: [], applied: [], interview: [], offer: [], rejected: [] },
+  trackerJobs: { saved: [], applied: [], phone_screen: [], rejected: [] },
   trackerLoading: false,
   // Backgrounds
   bgTemplates: [],
-  bgLoading: false
+  bgLoading: false,
+  // Cover Letter
+  clSavedId: null
 };
 
 var CS_API = window.API_BASE || '';
@@ -103,6 +110,7 @@ function csSwitchTab(tab) {
   // Auto-load data for certain tabs
   if (tab === 'tracker') csLoadTracker();
   if (tab === 'backgrounds') csLoadBackgrounds();
+  if (tab === 'resume' && !csState.dnaLoaded) csAutofillFromDNA();
 }
 
 function csRenderTab(tab) {
@@ -233,12 +241,12 @@ async function csSearchJobs() {
 function csTrackJob(idx) {
   var job = csState.jobResults[idx];
   if (!job) return;
-  fetch(CS_API + '/api/career/tracker/add', {
+  fetch(CS_API + '/api/career/v2/tracker', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ job_title: job.title, company: job.company, url: job.url || '', status: 'wishlist', notes: job.snippet || '' })
+    body: JSON.stringify({ job_title: job.title, company_name: job.company, job_url: job.url || '', status: 'saved', notes: job.snippet || '', job_source: job.source || 'search' })
   }).then(function(r) { return r.json(); }).then(function(d) {
-    if (d.status === 'success') {
+    if (d.success) {
       csShowToast('Added to tracker');
     }
   }).catch(function(e) { console.error(e); });
@@ -253,10 +261,9 @@ function csTracker() {
   if (csState.trackerLoading) return csLoadingSpinner('Loading tracker...');
 
   var columns = [
-    { id: 'wishlist', label: 'Wishlist', color: '#888' },
+    { id: 'saved', label: 'Saved', color: '#888' },
     { id: 'applied', label: 'Applied', color: '#4F8EF7' },
-    { id: 'interview', label: 'Interview', color: '#D4A843' },
-    { id: 'offer', label: 'Offer', color: '#2ecc71' },
+    { id: 'phone_screen', label: 'Phone Screen', color: '#D4A843' },
     { id: 'rejected', label: 'Rejected', color: '#e74c3c' }
   ];
 
@@ -305,7 +312,7 @@ function csLoadTracker() {
   csState.trackerLoading = true;
   renderCareerSuite();
   fetch(CS_API + '/api/career/v2/tracker').then(function(r) { return r.json(); }).then(function(data) {
-    csState.trackerJobs = data.kanban || { wishlist: [], applied: [], phone_screen: [], interview: [], offer: [], accepted: [], rejected: [] };
+    csState.trackerJobs = data.kanban || { saved: [], applied: [], phone_screen: [], rejected: [] };
     csState.trackerLoading = false;
     renderCareerSuite();
   }).catch(function() { csState.trackerLoading = false; renderCareerSuite(); });
@@ -369,7 +376,15 @@ function csResume() {
 
   // Left: Form
   html += '<div style="background:var(--surface-raised,#141414);border-radius:10px;padding:16px;">';
-  html += '<div style="font-size:14px;font-weight:600;color:var(--text-primary);margin-bottom:14px;">Your Information</div>';
+  html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">';
+  html += '<div style="font-size:14px;font-weight:600;color:var(--text-primary);">Your Information</div>';
+  if (!csState.dnaLoaded) {
+    html += '<button data-testid="resume-dna-autofill-btn" onclick="csAutofillFromDNA()" style="padding:5px 12px;border-radius:6px;border:1px solid var(--accent-gold,#D4A843);background:none;color:var(--accent-gold,#D4A843);font-size:11px;cursor:pointer;font-weight:600;">Autofill from DNA</button>';
+  } else {
+    html += '<span style="font-size:10px;color:var(--accent-gold,#D4A843);font-weight:600;">DNA loaded</span>';
+  }
+  html += '</div>';
+
   var fields = [
     { key: 'full_name', label: 'Full Name', ph: 'John Doe' },
     { key: 'title', label: 'Job Title', ph: 'Senior Software Engineer' },
@@ -382,11 +397,19 @@ function csResume() {
   fields.forEach(function(f) {
     html += '<div style="margin-bottom:10px;">';
     html += '<label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:3px;">' + f.label + '</label>';
-    html += '<input id="csRes_' + f.key + '" value="' + _esc(d[f.key] || '') + '" placeholder="' + f.ph + '" '
+    html += '<input data-testid="resume-' + f.key + '" id="csRes_' + f.key + '" value="' + _esc(d[f.key] || '') + '" placeholder="' + f.ph + '" '
          + 'oninput="csState.resumeData[\'' + f.key + '\']=this.value" '
          + 'style="width:100%;padding:8px 12px;border-radius:6px;border:1px solid var(--border-subtle,#333);background:var(--surface-base,#0a0a0a);color:var(--text-primary);font-size:12px;box-sizing:border-box;">';
     html += '</div>';
   });
+
+  // Headshot & Background upload
+  html += '<div style="display:flex;gap:10px;margin-bottom:10px;">';
+  html += '<div style="flex:1;"><label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:3px;">Headshot Photo</label>';
+  html += '<label data-testid="resume-headshot-upload" style="display:block;padding:8px;border-radius:6px;border:1px dashed rgba(255,255,255,.15);text-align:center;cursor:pointer;font-size:11px;color:var(--text-muted);">' + (csState.headshotUrl ? '<i class="fas fa-check" style="color:#2ecc71;"></i> Uploaded' : '<i class="fas fa-camera"></i> Upload') + '<input type="file" accept="image/*" onchange="csUploadCareerFile(this,\'headshot\')" style="display:none;"></label></div>';
+  html += '<div style="flex:1;"><label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:3px;">Background Image</label>';
+  html += '<label data-testid="resume-background-upload" style="display:block;padding:8px;border-radius:6px;border:1px dashed rgba(255,255,255,.15);text-align:center;cursor:pointer;font-size:11px;color:var(--text-muted);">' + (csState.backgroundUrl ? '<i class="fas fa-check" style="color:#2ecc71;"></i> Uploaded' : '<i class="fas fa-image"></i> Upload') + '<input type="file" accept="image/*" onchange="csUploadCareerFile(this,\'background\')" style="display:none;"></label></div>';
+  html += '</div>';
 
   // Textarea fields
   html += '<div style="margin-bottom:10px;"><label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:3px;">Professional Summary</label>';
@@ -405,9 +428,18 @@ function csResume() {
   html += '<input id="csRes_skills" value="' + _esc(d.skills || '') + '" placeholder="Python, React, Leadership, AWS..." oninput="csState.resumeData.skills=this.value" '
        + 'style="width:100%;padding:8px 12px;border-radius:6px;border:1px solid var(--border-subtle,#333);background:var(--surface-base,#0a0a0a);color:var(--text-primary);font-size:12px;box-sizing:border-box;"></div>';
 
-  html += '<button onclick="csEnhanceResume()" ' + (csState.resumeLoading ? 'disabled' : '') + ' '
-       + 'style="width:100%;padding:10px;border-radius:8px;border:none;background:var(--accent-gold,#D4A843);color:#000;font-weight:600;font-size:13px;cursor:pointer;">'
-       + (csState.resumeLoading ? 'Enhancing...' : '✨ AI Enhance Resume') + '</button>';
+  // Action buttons row
+  html += '<div style="display:flex;gap:8px;flex-wrap:wrap;">';
+  html += '<button data-testid="resume-save-enhance-btn" onclick="csSaveAndEnhanceResume()" ' + (csState.resumeLoading || csState.resumeSaving ? 'disabled' : '') + ' '
+       + 'style="flex:1;min-width:140px;padding:10px;border-radius:8px;border:none;background:var(--accent-gold,#D4A843);color:#000;font-weight:600;font-size:13px;cursor:pointer;">'
+       + (csState.resumeSaving ? 'Saving...' : csState.resumeLoading ? 'Enhancing...' : 'Save & AI Enhance') + '</button>';
+  if (csState.resumeId) {
+    html += '<button data-testid="resume-download-pdf-btn" onclick="csExportResume(\'pdf\')" '
+         + 'style="padding:10px 14px;border-radius:8px;border:1px solid var(--accent-gold,#D4A843);background:none;color:var(--accent-gold,#D4A843);font-weight:600;font-size:12px;cursor:pointer;"><i class="fas fa-file-pdf"></i> PDF</button>';
+    html += '<button data-testid="resume-download-docx-btn" onclick="csExportResume(\'docx\')" '
+         + 'style="padding:10px 14px;border-radius:8px;border:1px solid var(--accent-gold,#D4A843);background:none;color:var(--accent-gold,#D4A843);font-weight:600;font-size:12px;cursor:pointer;"><i class="fas fa-file-word"></i> DOCX</button>';
+  }
+  html += '</div>';
   html += '</div>';
 
   // Right: AI Enhanced Preview
@@ -419,10 +451,15 @@ function csResume() {
       html += '<div style="margin-bottom:14px;"><div style="font-size:11px;color:var(--accent-gold,#D4A843);font-weight:600;margin-bottom:4px;">ENHANCED SUMMARY</div>';
       html += '<div style="font-size:12px;color:var(--text-secondary);line-height:1.6;">' + _esc(e.enhanced_summary) + '</div></div>';
     }
+    if (e.ats_score) {
+      html += '<div style="margin-bottom:14px;display:flex;align-items:center;gap:10px;">';
+      html += '<div style="font-size:11px;color:var(--accent-gold,#D4A843);font-weight:600;">ATS SCORE</div>';
+      html += '<div style="background:rgba(212,168,67,0.15);border-radius:20px;padding:4px 14px;font-size:16px;font-weight:700;color:var(--accent-gold,#D4A843);">' + e.ats_score + '/100</div></div>';
+    }
     if (e.ats_keywords && e.ats_keywords.length) {
       html += '<div style="margin-bottom:14px;"><div style="font-size:11px;color:var(--accent-gold,#D4A843);font-weight:600;margin-bottom:6px;">ATS KEYWORDS</div>';
       html += '<div style="display:flex;flex-wrap:wrap;gap:4px;">';
-      e.ats_keywords.forEach(function(kw) {
+      (e.ats_keywords || e.keywords_added || []).forEach(function(kw) {
         html += '<span style="padding:3px 8px;border-radius:4px;background:var(--accent-gold,#D4A843)22;color:var(--accent-gold,#D4A843);font-size:10px;">' + _esc(kw) + '</span>';
       });
       html += '</div></div>';
@@ -442,10 +479,17 @@ function csResume() {
       html += '<div style="margin-bottom:14px;"><div style="font-size:11px;color:var(--accent-gold,#D4A843);font-weight:600;margin-bottom:4px;">COVER LETTER OPENER</div>';
       html += '<div style="font-size:12px;color:var(--text-secondary);line-height:1.6;font-style:italic;">"' + _esc(e.cover_letter_opener) + '"</div></div>';
     }
+    // Export buttons in preview panel too
+    if (csState.resumeId) {
+      html += '<div style="display:flex;gap:8px;margin-top:16px;padding-top:14px;border-top:1px solid var(--border-subtle,#222);">';
+      html += '<button data-testid="resume-preview-pdf-btn" onclick="csExportResume(\'pdf\')" style="flex:1;padding:10px;border-radius:8px;border:none;background:var(--accent-gold,#D4A843);color:#000;font-weight:600;font-size:12px;cursor:pointer;"><i class="fas fa-file-pdf"></i> Download PDF</button>';
+      html += '<button data-testid="resume-preview-docx-btn" onclick="csExportResume(\'docx\')" style="flex:1;padding:10px;border-radius:8px;border:1px solid var(--accent-gold,#D4A843);background:none;color:var(--accent-gold,#D4A843);font-weight:600;font-size:12px;cursor:pointer;"><i class="fas fa-file-word"></i> Download DOCX</button>';
+      html += '</div>';
+    }
   } else {
     html += '<div style="text-align:center;padding:40px 20px;color:var(--text-muted);">';
-    html += '<div style="font-size:28px;margin-bottom:10px;">✨</div>';
-    html += '<div style="font-size:13px;">Fill out your info and click "AI Enhance" to get Goldman Sachs-level resume content</div>';
+    html += '<div style="font-size:28px;margin-bottom:10px;"><i class="fas fa-magic" style="color:var(--accent-gold,#D4A843);"></i></div>';
+    html += '<div style="font-size:13px;">Fill out your info and click "Save & AI Enhance" to get Goldman Sachs-level resume content</div>';
     html += '</div>';
   }
   html += '</div>';
@@ -453,31 +497,134 @@ function csResume() {
   return html;
 }
 
-async function csEnhanceResume() {
+async function csSaveAndEnhanceResume() {
   var d = csState.resumeData;
   if (!d.full_name || !d.title) { csShowToast('Enter at least name and title'); return; }
+
+  // Step 1: Save to Supabase
+  csState.resumeSaving = true;
+  renderCareerSuite();
+
+  var expArr = (d.experience || '').split('\n').filter(Boolean).map(function(line) {
+    var parts = line.split('|').map(function(s) { return s.trim(); });
+    return { company: parts[0] || '', title: parts[1] || '', dates: parts[2] || '', description: parts[3] || '', achievements: (parts[3] || '').split(';').map(function(s){return s.trim();}).filter(Boolean) };
+  });
+  var eduArr = (d.education || '').split('\n').filter(Boolean).map(function(line) {
+    var parts = line.split('|').map(function(s) { return s.trim(); });
+    return { school: parts[0] || '', degree: parts[1] || '', year: parts[2] || '' };
+  });
+
+  var savePayload = {
+    full_name: d.full_name, email: d.email, phone: d.phone, location: d.location,
+    linkedin_url: d.linkedin, website: d.website, name: d.full_name + ' Resume',
+    summary: d.summary, skills: (d.skills || '').split(',').map(function(s){return s.trim();}).filter(Boolean),
+    work_experience: expArr, education: eduArr,
+    headshot_url: csState.headshotUrl || '', background_image_url: csState.backgroundUrl || ''
+  };
+
+  try {
+    if (csState.resumeId) {
+      // Update existing
+      await fetch(CS_API + '/api/career/v2/resumes/' + csState.resumeId, {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: savePayload.name, summary_text: savePayload.summary,
+          contact_info: JSON.stringify({ full_name: d.full_name, email: d.email, phone: d.phone, location: d.location, linkedin: d.linkedin, website: d.website }),
+          skills_section: JSON.stringify(savePayload.skills), education_section: JSON.stringify(eduArr),
+          raw_content: JSON.stringify(expArr), background_image_url: csState.backgroundUrl || '' })
+      });
+    } else {
+      // Create new
+      var r = await fetch(CS_API + '/api/career/v2/resumes', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(savePayload)
+      });
+      var data = await r.json();
+      if (data.resume_id) csState.resumeId = data.resume_id;
+    }
+    csShowToast('Resume saved');
+  } catch(e) { console.error('[Career] Save error:', e); csShowToast('Save failed'); }
+
+  csState.resumeSaving = false;
+
+  // Step 2: Enhance via AI
+  if (!csState.resumeId) { renderCareerSuite(); return; }
   csState.resumeLoading = true;
   csState.resumeEnhanced = null;
   renderCareerSuite();
+
   try {
-    var expArr = (d.experience || '').split('\n').filter(Boolean).map(function(line) {
-      var parts = line.split('|').map(function(s) { return s.trim(); });
-      return { company: parts[0] || '', title: parts[1] || '', dates: parts[2] || '', bullets: parts[3] || '' };
+    var r2 = await fetch(CS_API + '/api/career/v2/resumes/' + csState.resumeId + '/enhance', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ target_role: d.title })
     });
-    var r = await fetch(CS_API + '/api/career/resume/ai-enhance', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        full_name: d.full_name, title: d.title, summary: d.summary,
-        experience: expArr,
-        skills: (d.skills || '').split(',').map(function(s) { return s.trim(); }).filter(Boolean)
-      })
-    });
-    var data = await r.json();
-    if (data.enhanced) csState.resumeEnhanced = data.enhanced;
-  } catch(e) { console.error('[Career] Resume enhance error:', e); }
+    var data2 = await r2.json();
+    if (data2.enhanced) csState.resumeEnhanced = data2.enhanced;
+    csShowToast('Resume enhanced by SAL');
+  } catch(e) { console.error('[Career] Enhance error:', e); csShowToast('Enhancement failed — resume still saved'); }
+
   csState.resumeLoading = false;
   renderCareerSuite();
+}
+
+function csExportResume(fmt) {
+  if (!csState.resumeId) { csShowToast('Save resume first'); return; }
+  var url = CS_API + '/api/career/v2/resumes/' + csState.resumeId + '/export/' + fmt;
+  window.open(url, '_blank');
+  csShowToast('Downloading ' + fmt.toUpperCase() + '...');
+}
+
+async function csAutofillFromDNA() {
+  try {
+    // Try to get DNA from localStorage first
+    var dna = null;
+    try { dna = JSON.parse(localStorage.getItem('businessDNA') || 'null'); } catch(e) {}
+    if (!dna) {
+      // Fetch from backend
+      var r = await fetch(CS_API + '/api/user/dna');
+      if (r.ok) dna = await r.json();
+    }
+    if (dna && (dna.first_name || dna.email || dna.business_name)) {
+      // Autofill resume fields
+      if (!csState.resumeData.full_name && (dna.first_name || dna.last_name)) {
+        csState.resumeData.full_name = ((dna.first_name || '') + ' ' + (dna.last_name || '')).trim();
+      }
+      if (!csState.resumeData.email && dna.email) csState.resumeData.email = dna.email;
+      if (!csState.resumeData.phone && dna.phone) csState.resumeData.phone = dna.phone;
+      if (!csState.resumeData.title && dna.tagline) csState.resumeData.title = dna.tagline;
+      if (!csState.resumeData.summary && dna.bio) csState.resumeData.summary = dna.bio;
+      if (!csState.resumeData.location && (dna.business_city || dna.business_state)) {
+        csState.resumeData.location = ((dna.business_city || '') + ', ' + (dna.business_state || '')).replace(/^, |, $/g, '');
+      }
+      if (!csState.resumeData.website && dna.website) csState.resumeData.website = dna.website;
+      csState.dnaLoaded = true;
+      csShowToast('Autofilled from Business DNA');
+
+      // Also push to Supabase career profile
+      fetch(CS_API + '/api/career/v2/profile/autofill-dna', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ dna: dna })
+      }).catch(function() {});
+
+      renderCareerSuite();
+    }
+  } catch(e) { console.error('[Career] DNA autofill error:', e); }
+}
+
+async function csUploadCareerFile(input, type) {
+  var file = input.files[0];
+  if (!file) return;
+  var formData = new FormData();
+  formData.append('file', file);
+  try {
+    var r = await fetch(CS_API + '/api/career/v2/upload/' + type, { method: 'POST', body: formData });
+    var data = await r.json();
+    if (data.url) {
+      if (type === 'headshot') csState.headshotUrl = CS_API + data.url;
+      else csState.backgroundUrl = CS_API + data.url;
+      csShowToast(type.charAt(0).toUpperCase() + type.slice(1) + ' uploaded');
+      renderCareerSuite();
+    }
+  } catch(e) { console.error('[Career] Upload error:', e); csShowToast('Upload failed'); }
 }
 
 
@@ -760,8 +907,8 @@ function csSignature() {
 
   // Actions
   html += '<div style="display:flex;gap:8px;margin-top:16px;">';
-  html += '<button onclick="csCopySignature()" style="flex:1;padding:10px;border-radius:8px;border:1px solid rgba(255,255,255,.1);background:none;color:var(--text-secondary);font-size:12px;font-weight:600;cursor:pointer;">📋 Copy HTML</button>';
-  html += '<button onclick="csCopySignaturePlain()" style="flex:1;padding:10px;border-radius:8px;border:1px solid rgba(255,255,255,.1);background:none;color:var(--text-secondary);font-size:12px;font-weight:600;cursor:pointer;">📧 Add to Email</button>';
+  html += '<button data-testid="sig-copy-html-btn" onclick="csCopySignature()" style="flex:1;padding:10px;border-radius:8px;border:1px solid rgba(255,255,255,.1);background:none;color:var(--text-secondary);font-size:12px;font-weight:600;cursor:pointer;"><i class="fas fa-copy"></i> Copy HTML</button>';
+  html += '<button data-testid="sig-add-to-email-btn" onclick="csCopySignaturePlain()" style="flex:1;padding:10px;border-radius:8px;border:1px solid rgba(255,255,255,.1);background:none;color:var(--text-secondary);font-size:12px;font-weight:600;cursor:pointer;"><i class="fas fa-envelope"></i> Add to Email</button>';
   html += '</div>';
   html += '</div>';
 
@@ -1191,9 +1338,15 @@ function csCoverLetter() {
     h += '<div style="display:flex;justify-content:space-between;margin-bottom:8px;"><span style="color:var(--accent-gold);font-weight:600;">Generated Cover Letter</span>';
     h += '<span style="color:var(--text-muted);font-size:12px;">' + (clState.result.word_count||0) + ' words | ' + (clState.result.keywords_matched?.length||0) + ' keywords matched</span></div>';
     h += '<div style="color:var(--text-primary);font-size:14px;line-height:1.7;white-space:pre-wrap;">' + _esc(clState.result.cover_letter) + '</div>';
-    h += '<div style="display:flex;gap:8px;margin-top:12px;">';
+    h += '<div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;">';
     h += '<button data-testid="cl-copy-btn" onclick="navigator.clipboard.writeText(clState.result.cover_letter);csShowToast(\'Copied!\')" style="padding:8px 16px;border-radius:8px;border:none;background:var(--accent-gold);color:#000;font-weight:600;font-size:12px;cursor:pointer;">Copy</button>';
-    h += '<button onclick="clState.result=null;renderCareerSuite()" style="padding:8px 16px;border-radius:8px;border:1px solid var(--border-color);background:transparent;color:var(--text-secondary);font-size:12px;cursor:pointer;">New Letter</button></div></div></div>';
+    if (csState.clSavedId) {
+      h += '<button data-testid="cl-download-pdf-btn" onclick="csExportCoverLetter(\'pdf\')" style="padding:8px 16px;border-radius:8px;border:1px solid var(--accent-gold);background:none;color:var(--accent-gold);font-weight:600;font-size:12px;cursor:pointer;"><i class="fas fa-file-pdf"></i> PDF</button>';
+      h += '<button data-testid="cl-download-docx-btn" onclick="csExportCoverLetter(\'docx\')" style="padding:8px 16px;border-radius:8px;border:1px solid var(--accent-gold);background:none;color:var(--accent-gold);font-weight:600;font-size:12px;cursor:pointer;"><i class="fas fa-file-word"></i> DOCX</button>';
+    } else {
+      h += '<button data-testid="cl-save-export-btn" onclick="csSaveCoverLetterAndExport()" style="padding:8px 16px;border-radius:8px;border:1px solid var(--accent-gold);background:none;color:var(--accent-gold);font-weight:600;font-size:12px;cursor:pointer;">Save & Export</button>';
+    }
+    h += '<button onclick="clState.result=null;csState.clSavedId=null;renderCareerSuite()" style="padding:8px 16px;border-radius:8px;border:1px solid var(--border-color);background:transparent;color:var(--text-secondary);font-size:12px;cursor:pointer;">New Letter</button></div></div></div>';
     return h;
   }
   h += '<div style="display:flex;flex-direction:column;gap:12px;">';
@@ -1214,8 +1367,33 @@ function csGenerateCoverLetter() {
   if (typeof salCheckAccess === 'function') { salCheckAccess('career_coverletter').then(function(ok){ if(!ok)return; _doGenerateCoverLetter(r,j); }); } else { _doGenerateCoverLetter(r,j); }
 }
 function _doGenerateCoverLetter(r,j) {
-  clState.resumeText=r.value; clState.jobDesc=j.value; clState.loading=true; renderCareerSuite();
+  clState.resumeText=r.value; clState.jobDesc=j.value; clState.loading=true; csState.clSavedId=null; renderCareerSuite();
   fetch((window.API||'')+'/api/career/cover-letter',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({resume_text:clState.resumeText,job_description:clState.jobDesc,style:clState.style})}).then(function(r){return r.json()}).then(function(d){clState.result=d;clState.loading=false;if(typeof salLogUsage==='function')salLogUsage('cover_letter',3);renderCareerSuite()}).catch(function(e){clState.loading=false;csShowToast('Error: '+e.message);renderCareerSuite()});
+}
+
+async function csSaveCoverLetterAndExport() {
+  if (!clState.result || !clState.result.cover_letter) { csShowToast('Generate a cover letter first'); return; }
+  try {
+    var r = await fetch(CS_API + '/api/career/v2/cover-letters', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content: clState.result.cover_letter, style: clState.style,
+        target_company: clState.result.company || '', target_role: clState.result.role || '',
+        name: 'Cover Letter', saintssal_enhanced: true })
+    });
+    var data = await r.json();
+    if (data.cover_letter_id) {
+      csState.clSavedId = data.cover_letter_id;
+      csShowToast('Saved — now choose PDF or DOCX');
+      renderCareerSuite();
+    }
+  } catch(e) { console.error('[Career] Save CL error:', e); csShowToast('Save failed'); }
+}
+
+function csExportCoverLetter(fmt) {
+  if (!csState.clSavedId) { csShowToast('Save cover letter first'); return; }
+  var url = CS_API + '/api/career/v2/cover-letters/' + csState.clSavedId + '/export/' + fmt;
+  window.open(url, '_blank');
+  csShowToast('Downloading ' + fmt.toUpperCase() + '...');
 }
 
 /* ══════════════════════════════════════════════════════════════════════════════
