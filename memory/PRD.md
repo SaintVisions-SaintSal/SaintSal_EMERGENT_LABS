@@ -6,99 +6,80 @@ Build a full-stack business intelligence platform (SaintSal Labs) with 8 intelli
 ## Architecture
 - **Backend**: FastAPI on port 8001 (`/app/backend/server.py` + `/app/backend/routers/`)
 - **Frontend**: Vanilla JS served from `/app/frontend/public/` via React wrapper
-- **Database**: Supabase (connected), MongoDB (available)
+- **Database**: Supabase (primary), MongoDB (legacy)
 - **Payments**: Stripe (live keys configured)
 - **CRM**: Go High Level (connected)
-- **APIs**: RentCast, PropertyAPI, Ximilar, GoDaddy, CorpNet, Alpaca
+- **APIs**: RentCast, PropertyAPI, Ximilar, GoDaddy, CorpNet, Alpaca, Exa/Tavily
 
 ## What's Been Implemented
 
 ### Phase 0: Infrastructure (DONE)
 - Cloned repo, adapted to Emergent environment
 - Modular backend routers for all verticals
-- Supabase + GHL + Stripe keys configured and connected
+- Supabase + GHL + Stripe keys configured
 
 ### Phase 1: Frontend Restoration (DONE)
-- Restored Cmd+K command palette
-- Restored Career Suite tabs (Cover Letter, LinkedIn, Salary, Network)
-- Restored Real Estate property detail view
-- Restored Business Plan AI & Patent tabs
-- Built CookinCards camera scan UI
-- Built LaunchPad 10-step wizard
-- Fixed Social Studio scrolling bug
+- Cmd+K command palette, Career/Business/Real Estate tabs restored
+- CookinCards, LaunchPad, Social Studio UI built
 
 ### Phase 2: Metering System (DONE)
-- 5-tier pricing ($0/$27/$97/$297/$497)
-- 4 compute levels (Mini/Pro/Max/Max Fast)
-- Feature gating per tier
-- Rate limiting per tier
-- Stripe checkout session creation
-- 65+ integrations marketplace catalog
+- 5-tier pricing, compute levels, feature gating, rate limiting
+- Stripe checkout, 65+ integrations marketplace
 
 ### Phase 3: Business DNA + Revenue System (DONE — April 3, 2026)
-- **5-Step Business DNA Onboarding Wizard**
-  - Step 1: Personal Info (name, email, phone)
-  - Step 2: Business Type (individual/LLC/Corp/nonprofit, EIN, state)
-  - Step 3: Business Details (industry, revenue, employees, address)
-  - Step 4: Goals & Interests (10 categories, multi-select)
-  - Step 5: Tagline + Bio
-  - Saves to backend `/api/user/business-dna` and localStorage
-  - Data injected into AI chat system prompt for personalization
-- **SAL HQ Dashboard (Command Center)**
-  - Profile card with avatar, name, company, tagline, entity badge
-  - Quick Actions row (8 shortcuts)
-  - Business Overview (GHL contacts, pipelines, tier, billing)
-  - Recent Activity feed
-  - Intelligence Pillars based on DNA interests
-  - Lab Assets (saved builds)
-- **Credit Limit Modal System (3 types)**
-  - Credits Exhausted: top-up grid ($5/$10/$25/$50/$60/$100/$250), Stripe checkout
-  - Daily Limit Reached: upgrade CTA
-  - Model Upgrade Required: tier-specific upgrade pricing
-- **Credit Top-Up Checkout**: `/api/billing/credit-topup` -> Stripe one-time payment
-- **GHL Environment Fix**: Both `GHL_API_KEY` and `GHL_PRIVATE_TOKEN` configured
+- 5-step DNA onboarding wizard, SAL HQ Dashboard
+- Credit limit modals, top-up checkout, GHL env fix
 
-### Phase 4: Career Suite Supabase Migration + P0 Enhancements (DONE — April 4, 2026)
-- **Full Supabase Migration**: Moved all Career Suite data from in-memory/Mongo to Supabase
-
-## Pending / Upcoming Tasks
-- **Resume PDF/DOCX Export**: Save resume to Supabase, then export via `/api/career/v2/resumes/{id}/export/pdf|docx`
-- **Business DNA Autofill**: Resume builder auto-populates from DNA profile (name, email, phone, company, skills)
-- **Cover Letter PDF/DOCX Export**: Save generated cover letter, then export via `/api/career/v2/cover-letters/{id}/export/pdf|docx`
-- **Email Signature Copy HTML**: One-click clipboard copy of full HTML signature
-- **Headshot & Background Upload**: File upload endpoints for user photos (`/api/career/v2/upload/headshot|background`)
-- **Job Tracker Kanban**: Supabase-backed with Saved/Applied/Phone Screen/Rejected columns
-- **Job Search**: Wired to `/api/career/jobs/search` with save-to-tracker functionality
-- **Tone Mapping**: Frontend styles (direct/storytelling/technical) mapped to valid Supabase check constraint values
+### Phase 4: Career Suite Supabase Migration (DONE — April 4, 2026)
+- Full Supabase migration (all Career data off MongoDB)
+- Resume/Cover Letter PDF/DOCX export
+- DNA autofill, headshot/background upload, job tracker kanban
 
 ### Phase 5: Auth Fix (DONE — April 4, 2026)
-- **Root cause**: Supabase email confirmation was blocking users — confirmation emails never arrived via Supabase's default SMTP
-- **Fix**: Auto-confirm all users on signup AND login via Supabase Admin API (`email_confirm: true`)
-- **Signup flow**: Creates user → auto-confirms email → auto-signs-in → returns session token immediately
-- **Login flow**: If "email not confirmed" error, auto-confirms via admin API then retries sign-in
-- **ryan@cookin.io**: Password reset to `SaintSal2024!` via admin API, email confirmed
-- **Topbar Sign In button**: Added prominent gold "Sign In" button in topbar (replaces with avatar after login)
-- **Welcome email**: Sent via Resend after signup
+- Auto-confirm emails on signup AND login via Supabase Admin API
+- ryan@cookin.io password reset, topbar Sign In button
 
-### P1 — Next Up
-- **Live Data Feeds + Tickers** (Step 4): Personalized data feeds in intelligence verticals based on Business DNA
-- Wire Supabase billing tables (billing_profiles, credit_transactions, usage_logs)
-- Full metering middleware (pre-flight/post-flight on every AI call)
-- Credit balance deduction in real-time
-- Stripe webhook handler for subscription lifecycle + credit purchases
-- GHL contact sync on billing events (tier tags, LTV)
-- E2E testing of Builder v2 pipeline, Launch Pad wizard, CookinCards
+### Phase 6: Career Suite P0 Complete (DONE — April 5, 2026)
+- **Resume PDF/DOCX downloads**: Save & AI Enhance → PDF/DOCX export buttons appear
+- **Cover Letter PDF/DOCX downloads**: Generate → Save & Export → PDF/DOCX buttons
+- **Email Signature Copy HTML**: One-click clipboard copy
+- **Job Search**: Exa-powered with Monster/Indeed/LinkedIn/Glassdoor domain filters, save to tracker
+- **8-Column Kanban**: saved → applied → phone_screen → interview_scheduled → interview_completed → offer_received → job_won → rejected
+- **DNA Autofill**: Auto-populates resume from Business DNA on tab open
+- **Supabase Storage uploads**: Headshot/background → career-uploads bucket (persistent across deploys)
+- **Interview Prep Auto-Generation**: Moving to interview_scheduled triggers prep pack (checklist, common Qs, company-specific AI Qs, power tips)
+- **Stage Coaching**: Every pipeline transition triggers SAL guidance popup with tips
+- **Builder Session Persistence**: Sessions saved to Supabase (in-memory fallback)
+- **Architecture fixes**: Singleton Supabase client, JWT user_id extraction, interview status constraint, dead pymongo/motor removed
 
-### P2 — Future
-- Investment & Lending Portfolios (Step 5, Alpaca API)
-- Deal Analyzer Engine (Fix & Flip + Rental/DSCR calculators)
-- Lending Pipeline (CookinCapital)
-- Saved Searches with alerts
-- Cross-platform sync (saintsallabs.com <-> saintsal.ai)
+## Upcoming — Builder + Creative Studio Enhancement
 
-### P3 — Backlog
-- iOS app sync
-- ElevenLabs voice agent
+### Phase 7: Website Intelligence Engine (NEXT)
+- POST /api/studio/website-intel: crawl URL → extract brand, colors, fonts, SEO audit, content analysis
+- Save to Brand DNA, use as context for all generation
+
+### Phase 8: DNA-Powered Builder
+- Inject Business DNA + website crawl into Builder v2 pipeline
+- Brand-matched builds (colors, fonts, voice)
+- Deploy to Vercel + Cloudflare Pages + Render static
+
+### Phase 9: Marketing Campaign Builder
+- Full multi-platform campaign generation
+- Content calendar, email sequences, ad creatives
+- KPI targets and budget allocation
+
+### Phase 10: Enhanced Creative Studio
+- Multi-provider image generation (DALL-E 3, Flux, Runway)
+- Email Sequence Builder
+- Ad Creative Generator
+- Analytics dashboard
+
+### Supabase Tables Needed
+- website_crawls, marketing_campaigns, generated_assets, builder_sessions, email_sequences
+
+## P2 — Backlog
+- Investment & Lending Portfolios (Alpaca API)
+- iOS app sync, ElevenLabs voice agent
 - White-label / HACP provisioning
-- Smart Memory System (pgvector semantic search)
-- Custom agent creation for Teams/Enterprise
+- Smart Memory System (pgvector)
+- Rate limiting on AI endpoints (metering integration)
