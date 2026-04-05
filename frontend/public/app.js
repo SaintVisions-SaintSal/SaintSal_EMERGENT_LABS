@@ -9002,14 +9002,17 @@ function renderCreativeStudio() {
   if (!root) return;
 
   var tabs = [
-    { id: 'content-engine', label: 'Content Engine', icon: '\u270D\uFE0F' },
-    { id: 'image-gen', label: 'Image Gen', icon: '\uD83C\uDFA8' },
-    { id: 'video-prod', label: 'Video Studio', icon: '\uD83C\uDFAC' },
-    { id: 'social-posting', label: 'Social Calendar', icon: '\uD83D\uDCC5' },
-    { id: 'ad-creative', label: 'Ad Creative', icon: '\uD83D\uDCE2' },
-    { id: 'brand-profiles', label: 'Brand Profiles', icon: '\uD83C\uDFF7\uFE0F' },
-    { id: 'marketing-auto', label: 'Marketing Auto', icon: '\u26A1' },
-    { id: 'tiering', label: 'Plans & Usage', icon: '\uD83D\uDCCA' }
+    { id: 'website-intel', label: 'Website Intel', icon: '<i class="fas fa-globe" style="font-size:14px;"></i>' },
+    { id: 'campaign-builder', label: 'Campaigns', icon: '<i class="fas fa-bullhorn" style="font-size:14px;"></i>' },
+    { id: 'content-engine', label: 'Content Engine', icon: '<i class="fas fa-pen-fancy" style="font-size:14px;"></i>' },
+    { id: 'image-gen', label: 'Image Gen', icon: '<i class="fas fa-palette" style="font-size:14px;"></i>' },
+    { id: 'video-prod', label: 'Video Studio', icon: '<i class="fas fa-video" style="font-size:14px;"></i>' },
+    { id: 'social-posting', label: 'Social Calendar', icon: '<i class="fas fa-calendar-alt" style="font-size:14px;"></i>' },
+    { id: 'ad-creative', label: 'Ad Creative', icon: '<i class="fas fa-ad" style="font-size:14px;"></i>' },
+    { id: 'email-sequences', label: 'Email Builder', icon: '<i class="fas fa-envelope-open-text" style="font-size:14px;"></i>' },
+    { id: 'brand-profiles', label: 'Brand Profiles', icon: '<i class="fas fa-tag" style="font-size:14px;"></i>' },
+    { id: 'marketing-auto', label: 'Marketing Auto', icon: '<i class="fas fa-bolt" style="font-size:14px;"></i>' },
+    { id: 'tiering', label: 'Plans & Usage', icon: '<i class="fas fa-chart-bar" style="font-size:14px;"></i>' }
   ];
 
   var tabsHtml = tabs.map(function(t) {
@@ -9029,7 +9032,7 @@ function renderCreativeStudio() {
           '</svg>' +
           '<div>' +
             '<div class="social-studio-title">Creative Studio</div>' +
-            '<div class="social-studio-subtitle">Content Engine &middot; Image &amp; Video &middot; Social Calendar &middot; Ad Creative &middot; Brand Profiles</div>' +
+            '<div class="social-studio-subtitle">Website Intel &middot; Campaigns &middot; Content &middot; Image &amp; Video &middot; Ads &middot; Email</div>' +
           '</div>' +
         '</div>' +
         '<div style="display:flex;align-items:center;gap:8px;">' +
@@ -9074,6 +9077,9 @@ function renderCSTab(tab) {
   if (!body) return;
   body.innerHTML = csSpinner('Loading...');
   switch (tab) {
+    case 'website-intel': renderWebsiteIntel(body); break;
+    case 'campaign-builder': renderCampaignBuilder(body); break;
+    case 'email-sequences': renderEmailSequences(body); break;
     case 'content-engine': renderContentEngine(body); break;
     case 'image-gen': renderImageGen(body); break;
     case 'video-prod': renderVideoStudio(body); break;
@@ -9089,6 +9095,356 @@ function renderCSTab(tab) {
 // ═══════════════════════════════════════════════════════════════════════════════
 // TAB 0: CONTENT ENGINE
 // ═══════════════════════════════════════════════════════════════════════════════
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// TAB: WEBSITE INTELLIGENCE ENGINE
+// ═══════════════════════════════════════════════════════════════════════════════
+
+var webIntelState = { url: '', loading: false, result: null, crawls: [] };
+
+function renderWebsiteIntel(container) {
+  var h = '<div style="max-width:900px;margin:0 auto;">';
+  h += '<div class="cs-card" style="margin-bottom:20px;">';
+  h += '<div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;">';
+  h += '<i class="fas fa-globe" style="font-size:20px;color:#d4a843;"></i>';
+  h += '<div><div style="font-size:18px;font-weight:700;color:#fff;">Website Intelligence Engine</div>';
+  h += '<div style="font-size:12px;color:#999;">Paste any URL — SAL crawls it, extracts brand DNA, audits SEO, finds opportunities.</div></div></div>';
+  h += '<div style="display:flex;gap:8px;">';
+  h += '<input data-testid="webintel-url-input" class="cs-input" id="wiUrl" placeholder="https://yourwebsite.com" value="' + (webIntelState.url || '') + '" style="flex:1;" oninput="webIntelState.url=this.value">';
+  h += '<button data-testid="webintel-crawl-btn" class="cs-btn-gold" onclick="runWebsiteCrawl()" ' + (webIntelState.loading ? 'disabled' : '') + '>';
+  h += webIntelState.loading ? '<i class="fas fa-spinner fa-spin"></i> Crawling...' : '<i class="fas fa-search"></i> Analyze';
+  h += '</button></div></div>';
+
+  if (webIntelState.result) {
+    var r = webIntelState.result;
+    var brand = r.brand_extraction || {};
+    var seo = r.seo_audit || {};
+    var content = r.content_analysis || {};
+    var opps = r.marketing_opportunities || [];
+
+    // Brand Card
+    h += '<div class="cs-grid-2" style="margin-bottom:16px;">';
+    h += '<div class="cs-card">';
+    h += '<div style="font-size:14px;font-weight:700;color:#d4a843;margin-bottom:12px;"><i class="fas fa-paint-brush"></i> Brand Extraction</div>';
+    if (brand.brand_name) h += '<div style="font-size:16px;font-weight:700;color:#fff;margin-bottom:4px;">' + _escHtml(brand.brand_name) + '</div>';
+    if (brand.tagline) h += '<div style="font-size:12px;color:#aaa;margin-bottom:8px;font-style:italic;">"' + _escHtml(brand.tagline) + '"</div>';
+    if (brand.industry) h += '<div style="font-size:11px;color:#888;margin-bottom:6px;"><i class="fas fa-industry" style="color:#d4a843;"></i> ' + _escHtml(brand.industry) + '</div>';
+    if (brand.voice_tone) h += '<div style="font-size:11px;color:#888;margin-bottom:6px;"><i class="fas fa-volume-up" style="color:#d4a843;"></i> Voice: ' + _escHtml(brand.voice_tone) + '</div>';
+    if (brand.colors) {
+      h += '<div style="display:flex;gap:6px;margin-top:8px;">';
+      Object.keys(brand.colors).forEach(function(k) {
+        var c = brand.colors[k];
+        if (c) h += '<div style="display:flex;align-items:center;gap:4px;"><div style="width:20px;height:20px;border-radius:4px;background:' + c + ';border:1px solid rgba(255,255,255,0.15);"></div><span style="font-size:10px;color:#777;">' + c + '</span></div>';
+      });
+      h += '</div>';
+    }
+    if (brand.products_services && brand.products_services.length) {
+      h += '<div style="margin-top:10px;"><div style="font-size:10px;color:#666;margin-bottom:4px;">PRODUCTS/SERVICES</div>';
+      brand.products_services.forEach(function(p) { h += '<span style="display:inline-block;padding:2px 8px;border-radius:4px;background:rgba(212,168,67,0.1);color:#d4a843;font-size:10px;margin:2px;">' + _escHtml(p) + '</span>'; });
+      h += '</div>';
+    }
+    h += '</div>';
+
+    // SEO Card
+    h += '<div class="cs-card">';
+    h += '<div style="font-size:14px;font-weight:700;color:#d4a843;margin-bottom:12px;"><i class="fas fa-search"></i> SEO Audit</div>';
+    if (seo.seo_score !== undefined) {
+      var scoreColor = seo.seo_score >= 70 ? '#2ecc71' : seo.seo_score >= 40 ? '#f39c12' : '#e74c3c';
+      h += '<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">';
+      h += '<div style="font-size:28px;font-weight:800;color:' + scoreColor + ';">' + seo.seo_score + '</div>';
+      h += '<div style="font-size:11px;color:#888;">/100 SEO Score</div></div>';
+    }
+    if (seo.title_tag) h += '<div style="font-size:11px;color:#aaa;margin-bottom:4px;"><strong>Title:</strong> ' + _escHtml(seo.title_tag) + '</div>';
+    if (seo.missing_elements && seo.missing_elements.length) {
+      h += '<div style="margin-top:8px;"><div style="font-size:10px;color:#e74c3c;margin-bottom:4px;">MISSING</div>';
+      seo.missing_elements.forEach(function(m) { h += '<div style="font-size:11px;color:#e74c3c;padding:2px 0;"><i class="fas fa-times" style="font-size:9px;"></i> ' + _escHtml(m) + '</div>'; });
+      h += '</div>';
+    }
+    if (seo.recommendations && seo.recommendations.length) {
+      h += '<div style="margin-top:8px;"><div style="font-size:10px;color:#2ecc71;margin-bottom:4px;">RECOMMENDATIONS</div>';
+      seo.recommendations.forEach(function(r) { h += '<div style="font-size:11px;color:#aaa;padding:2px 0;"><i class="fas fa-check" style="color:#2ecc71;font-size:9px;"></i> ' + _escHtml(r) + '</div>'; });
+      h += '</div>';
+    }
+    h += '</div></div>';
+
+    // Opportunities
+    if (opps.length) {
+      h += '<div class="cs-card" style="margin-bottom:16px;border-left:3px solid #d4a843;">';
+      h += '<div style="font-size:14px;font-weight:700;color:#d4a843;margin-bottom:10px;"><i class="fas fa-lightbulb"></i> Marketing Opportunities</div>';
+      opps.forEach(function(o) {
+        h += '<div style="font-size:12px;color:#ccc;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.05);"><i class="fas fa-arrow-right" style="color:#d4a843;font-size:10px;margin-right:6px;"></i>' + _escHtml(o) + '</div>';
+      });
+      h += '<button class="cs-btn-gold" onclick="switchCSTab(\'campaign-builder\')" style="margin-top:12px;"><i class="fas fa-bullhorn"></i> Generate Campaign from This</button>';
+      h += '</div>';
+    }
+  }
+
+  // Previous crawls
+  h += '<div style="margin-top:16px;"><div style="font-size:12px;color:#666;margin-bottom:8px;">PREVIOUS CRAWLS</div>';
+  h += '<div id="wiCrawlsList" style="font-size:11px;color:#888;">Loading...</div></div>';
+  h += '</div>';
+  container.innerHTML = h;
+  loadPreviousCrawls();
+}
+
+async function runWebsiteCrawl() {
+  var url = webIntelState.url;
+  if (!url) return;
+  webIntelState.loading = true;
+  webIntelState.result = null;
+  renderWebsiteIntel(document.getElementById('csBody'));
+  try {
+    var r = await fetch((window.API || '') + '/api/studio/website-intel', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url: url })
+    });
+    var data = await r.json();
+    webIntelState.result = data;
+  } catch(e) { console.error('[WebIntel]', e); }
+  webIntelState.loading = false;
+  renderWebsiteIntel(document.getElementById('csBody'));
+}
+
+async function loadPreviousCrawls() {
+  var el = document.getElementById('wiCrawlsList');
+  if (!el) return;
+  try {
+    var r = await fetch((window.API || '') + '/api/studio/website-intel');
+    var data = await r.json();
+    var crawls = data.crawls || [];
+    if (crawls.length === 0) { el.innerHTML = 'No crawls yet'; return; }
+    var h = '';
+    crawls.forEach(function(c) {
+      var brand = c.brand_extraction || {};
+      h += '<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.05);cursor:pointer;" onclick="loadCrawl(\'' + c.id + '\')">';
+      h += '<div><span style="color:#d4a843;">' + _escHtml(brand.brand_name || c.url || '') + '</span> <span style="color:#666;">— ' + _escHtml(c.url || '') + '</span></div>';
+      h += '<span style="color:#555;font-size:10px;">' + (c.created_at || '').substring(0,10) + '</span></div>';
+    });
+    el.innerHTML = h;
+  } catch(e) { el.innerHTML = 'Could not load crawls'; }
+}
+
+async function loadCrawl(id) {
+  try {
+    var r = await fetch((window.API || '') + '/api/studio/website-intel/' + id);
+    var data = await r.json();
+    webIntelState.result = data;
+    webIntelState.url = data.url || '';
+    renderWebsiteIntel(document.getElementById('csBody'));
+  } catch(e) { console.error(e); }
+}
+
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// TAB: MARKETING CAMPAIGN BUILDER
+// ═══════════════════════════════════════════════════════════════════════════════
+
+var campState = { goal: '', type: 'awareness', duration: 14, platforms: ['instagram','linkedin','twitter','email'], budget: '$500', loading: false, result: null, campaigns: [] };
+
+function renderCampaignBuilder(container) {
+  var h = '<div style="max-width:900px;margin:0 auto;">';
+  h += '<div class="cs-card" style="margin-bottom:20px;">';
+  h += '<div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;">';
+  h += '<i class="fas fa-bullhorn" style="font-size:20px;color:#d4a843;"></i>';
+  h += '<div><div style="font-size:18px;font-weight:700;color:#fff;">Marketing Campaign Builder</div>';
+  h += '<div style="font-size:12px;color:#999;">Full multi-platform campaigns with content calendar, emails, ads, and KPIs.</div></div></div>';
+
+  // Form
+  h += '<div class="cs-grid-2" style="margin-bottom:14px;">';
+  h += '<div><label class="cs-label">Campaign Goal</label><input data-testid="campaign-goal-input" class="cs-input" placeholder="Launch our new AI resume builder feature" value="' + _escHtml(campState.goal) + '" oninput="campState.goal=this.value"></div>';
+  h += '<div><label class="cs-label">Campaign Type</label><select data-testid="campaign-type-select" class="cs-select" onchange="campState.type=this.value">';
+  ['awareness','product_launch','lead_gen','event','seasonal'].forEach(function(t) {
+    h += '<option value="' + t + '"' + (campState.type===t?' selected':'') + '>' + t.replace('_',' ').replace(/\b\w/g, function(l){return l.toUpperCase();}) + '</option>';
+  });
+  h += '</select></div></div>';
+
+  h += '<div class="cs-grid-2" style="margin-bottom:14px;">';
+  h += '<div><label class="cs-label">Duration (days)</label><input class="cs-input" type="number" value="' + campState.duration + '" onchange="campState.duration=parseInt(this.value)"></div>';
+  h += '<div><label class="cs-label">Budget</label><input class="cs-input" value="' + _escHtml(campState.budget) + '" oninput="campState.budget=this.value"></div></div>';
+
+  h += '<div style="margin-bottom:14px;"><label class="cs-label">Platforms</label><div style="display:flex;gap:6px;flex-wrap:wrap;">';
+  ['instagram','linkedin','twitter','facebook','tiktok','email','youtube'].forEach(function(p) {
+    var active = campState.platforms.indexOf(p) >= 0;
+    h += '<button onclick="toggleCampPlatform(\'' + p + '\')" style="padding:6px 14px;border-radius:20px;border:1px solid ' + (active?'#d4a843':'rgba(255,255,255,0.15)') + ';background:' + (active?'rgba(212,168,67,0.15)':'transparent') + ';color:' + (active?'#d4a843':'#777') + ';font-size:12px;cursor:pointer;text-transform:capitalize;">' + p + '</button>';
+  });
+  h += '</div></div>';
+
+  h += '<button data-testid="campaign-generate-btn" class="cs-btn-gold" onclick="generateCampaign()" style="width:100%;" ' + (campState.loading?'disabled':'') + '>';
+  h += campState.loading ? '<i class="fas fa-spinner fa-spin"></i> Generating Campaign...' : '<i class="fas fa-rocket"></i> Generate Full Campaign';
+  h += '</button></div>';
+
+  // Results
+  if (campState.result) {
+    var c = campState.result;
+    h += '<div class="cs-card" style="margin-bottom:16px;border-left:3px solid #d4a843;">';
+    h += '<div style="font-size:16px;font-weight:700;color:#fff;margin-bottom:4px;">' + _escHtml(c.campaign_name || 'Campaign') + '</div>';
+    h += '<div style="font-size:12px;color:#aaa;margin-bottom:14px;">' + _escHtml(c.strategy || '') + '</div>';
+
+    // KPIs
+    if (c.kpis) {
+      h += '<div style="display:flex;gap:12px;margin-bottom:16px;flex-wrap:wrap;">';
+      Object.keys(c.kpis).forEach(function(k) {
+        h += '<div style="background:rgba(212,168,67,0.08);border-radius:8px;padding:8px 14px;"><div style="font-size:10px;color:#888;">' + k.replace(/_/g,' ').toUpperCase() + '</div>';
+        h += '<div style="font-size:16px;font-weight:700;color:#d4a843;">' + c.kpis[k] + '</div></div>';
+      });
+      h += '</div>';
+    }
+
+    // Content Calendar
+    if (c.content_calendar && c.content_calendar.length) {
+      h += '<div style="font-size:14px;font-weight:600;color:#d4a843;margin-bottom:10px;"><i class="fas fa-calendar-alt"></i> Content Calendar</div>';
+      c.content_calendar.forEach(function(day) {
+        h += '<div style="margin-bottom:10px;"><div style="font-size:11px;font-weight:600;color:#888;margin-bottom:4px;">DAY ' + day.day + '</div>';
+        (day.posts || []).forEach(function(post) {
+          h += '<div style="background:rgba(255,255,255,0.03);border-radius:8px;padding:10px;margin-bottom:6px;border-left:2px solid #d4a843;">';
+          h += '<div style="display:flex;justify-content:space-between;margin-bottom:4px;"><span style="color:#d4a843;font-size:11px;font-weight:600;text-transform:uppercase;">' + _escHtml(post.platform || '') + ' — ' + _escHtml(post.type || '') + '</span>';
+          h += '<span style="color:#666;font-size:10px;">' + _escHtml(post.optimal_time || '') + '</span></div>';
+          h += '<div style="font-size:12px;color:#ccc;line-height:1.5;">' + _escHtml(post.caption || '') + '</div>';
+          if (post.cta) h += '<div style="font-size:10px;color:#d4a843;margin-top:4px;">CTA: ' + _escHtml(post.cta) + '</div>';
+          h += '</div>';
+        });
+        h += '</div>';
+      });
+    }
+
+    // Email Sequence
+    if (c.email_sequence && c.email_sequence.length) {
+      h += '<div style="font-size:14px;font-weight:600;color:#d4a843;margin:16px 0 10px;"><i class="fas fa-envelope"></i> Email Sequence</div>';
+      c.email_sequence.forEach(function(email) {
+        h += '<div style="background:rgba(255,255,255,0.03);border-radius:8px;padding:10px;margin-bottom:6px;border-left:2px solid #9b59b6;">';
+        h += '<div style="display:flex;justify-content:space-between;margin-bottom:4px;"><span style="color:#9b59b6;font-size:11px;font-weight:600;">Day ' + email.day + '</span></div>';
+        h += '<div style="font-size:13px;color:#fff;font-weight:600;margin-bottom:4px;">' + _escHtml(email.subject || '') + '</div>';
+        if (email.preview_text) h += '<div style="font-size:11px;color:#888;margin-bottom:6px;">' + _escHtml(email.preview_text) + '</div>';
+        h += '</div>';
+      });
+    }
+
+    // Ad Creatives
+    if (c.ad_creatives && c.ad_creatives.length) {
+      h += '<div style="font-size:14px;font-weight:600;color:#d4a843;margin:16px 0 10px;"><i class="fas fa-ad"></i> Ad Creatives</div>';
+      h += '<div class="cs-grid-2">';
+      c.ad_creatives.forEach(function(ad) {
+        h += '<div class="cs-card" style="border-left:2px solid #e74c3c;">';
+        h += '<div style="font-size:10px;color:#e74c3c;font-weight:600;margin-bottom:4px;">' + _escHtml(ad.platform || '').toUpperCase() + '</div>';
+        h += '<div style="font-size:14px;font-weight:700;color:#fff;margin-bottom:4px;">' + _escHtml(ad.headline || '') + '</div>';
+        h += '<div style="font-size:12px;color:#aaa;margin-bottom:6px;">' + _escHtml(ad.primary_text || '') + '</div>';
+        if (ad.audience_targeting) h += '<div style="font-size:10px;color:#888;"><i class="fas fa-users"></i> ' + _escHtml(typeof ad.audience_targeting === 'string' ? ad.audience_targeting : JSON.stringify(ad.audience_targeting)) + '</div>';
+        if (ad.budget_split) h += '<div style="font-size:10px;color:#d4a843;margin-top:4px;">' + _escHtml(ad.budget_split) + '</div>';
+        h += '</div>';
+      });
+      h += '</div>';
+    }
+    h += '</div>';
+  }
+  h += '</div>';
+  container.innerHTML = h;
+}
+
+function toggleCampPlatform(p) {
+  var idx = campState.platforms.indexOf(p);
+  if (idx >= 0) campState.platforms.splice(idx, 1);
+  else campState.platforms.push(p);
+  renderCampaignBuilder(document.getElementById('csBody'));
+}
+
+async function generateCampaign() {
+  if (!campState.goal) return;
+  campState.loading = true;
+  campState.result = null;
+  renderCampaignBuilder(document.getElementById('csBody'));
+  try {
+    var r = await fetch((window.API || '') + '/api/studio/campaigns/generate', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        campaign_type: campState.type, goal: campState.goal,
+        duration_days: campState.duration, platforms: campState.platforms,
+        budget: campState.budget
+      })
+    });
+    campState.result = await r.json();
+  } catch(e) { console.error('[Campaign]', e); }
+  campState.loading = false;
+  renderCampaignBuilder(document.getElementById('csBody'));
+}
+
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// TAB: EMAIL SEQUENCE BUILDER
+// ═══════════════════════════════════════════════════════════════════════════════
+
+var emailSeqState = { type: 'welcome', count: 5, goal: '', audience: '', loading: false, result: null };
+
+function renderEmailSequences(container) {
+  var h = '<div style="max-width:800px;margin:0 auto;">';
+  h += '<div class="cs-card" style="margin-bottom:20px;">';
+  h += '<div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;">';
+  h += '<i class="fas fa-envelope-open-text" style="font-size:20px;color:#d4a843;"></i>';
+  h += '<div><div style="font-size:18px;font-weight:700;color:#fff;">Email Sequence Builder</div>';
+  h += '<div style="font-size:12px;color:#999;">Generate complete email sequences — welcome, nurture, launch, re-engagement.</div></div></div>';
+
+  h += '<div class="cs-grid-2" style="margin-bottom:14px;">';
+  h += '<div><label class="cs-label">Sequence Type</label><select data-testid="email-seq-type" class="cs-select" onchange="emailSeqState.type=this.value">';
+  ['welcome','nurture','launch','abandoned_cart','re_engagement'].forEach(function(t) {
+    h += '<option value="' + t + '"' + (emailSeqState.type===t?' selected':'') + '>' + t.replace(/_/g,' ').replace(/\b\w/g, function(l){return l.toUpperCase();}) + '</option>';
+  });
+  h += '</select></div>';
+  h += '<div><label class="cs-label">Emails Count</label><input class="cs-input" type="number" value="' + emailSeqState.count + '" onchange="emailSeqState.count=parseInt(this.value)" min="2" max="10"></div></div>';
+  h += '<div style="margin-bottom:14px;"><label class="cs-label">Goal</label><input data-testid="email-seq-goal" class="cs-input" placeholder="Onboard new users and convert to paid" value="' + _escHtml(emailSeqState.goal) + '" oninput="emailSeqState.goal=this.value"></div>';
+  h += '<div style="margin-bottom:14px;"><label class="cs-label">Target Audience</label><input class="cs-input" placeholder="New signups who haven\'t upgraded" value="' + _escHtml(emailSeqState.audience) + '" oninput="emailSeqState.audience=this.value"></div>';
+  h += '<button data-testid="email-seq-generate-btn" class="cs-btn-gold" onclick="generateEmailSeq()" style="width:100%;" ' + (emailSeqState.loading?'disabled':'') + '>';
+  h += emailSeqState.loading ? '<i class="fas fa-spinner fa-spin"></i> Generating...' : '<i class="fas fa-magic"></i> Generate Sequence';
+  h += '</button></div>';
+
+  if (emailSeqState.result && emailSeqState.result.sequence) {
+    var seq = emailSeqState.result.sequence;
+    var perf = emailSeqState.result.estimated_performance || {};
+    if (Object.keys(perf).length) {
+      h += '<div style="display:flex;gap:12px;margin-bottom:16px;flex-wrap:wrap;">';
+      Object.keys(perf).forEach(function(k) {
+        h += '<div style="background:rgba(155,89,182,0.1);border-radius:8px;padding:8px 14px;"><div style="font-size:10px;color:#888;">' + k.replace(/_/g,' ').toUpperCase() + '</div>';
+        h += '<div style="font-size:14px;font-weight:700;color:#9b59b6;">' + perf[k] + '</div></div>';
+      });
+      h += '</div>';
+    }
+    seq.forEach(function(email, i) {
+      h += '<div class="cs-card" style="margin-bottom:10px;border-left:3px solid #9b59b6;">';
+      h += '<div style="display:flex;justify-content:space-between;margin-bottom:6px;">';
+      h += '<span style="color:#9b59b6;font-size:12px;font-weight:600;">Email ' + (i+1) + ' — Day ' + email.day + '</span>';
+      h += '<span style="color:#666;font-size:11px;">' + (email.send_time || '') + '</span></div>';
+      h += '<div style="font-size:14px;font-weight:700;color:#fff;margin-bottom:4px;">' + _escHtml(email.subject || '') + '</div>';
+      if (email.preview_text) h += '<div style="font-size:11px;color:#888;margin-bottom:8px;">' + _escHtml(email.preview_text) + '</div>';
+      if (email.body_html) {
+        h += '<div style="background:rgba(0,0,0,0.3);border-radius:6px;padding:10px;font-size:12px;color:#ccc;max-height:150px;overflow-y:auto;">' + email.body_html + '</div>';
+      }
+      if (email.cta) {
+        h += '<div style="margin-top:8px;"><button class="cs-btn-gold" style="padding:6px 14px;font-size:12px;">' + _escHtml(email.cta.text || email.cta || '') + '</button></div>';
+      }
+      h += '</div>';
+    });
+  }
+  h += '</div>';
+  container.innerHTML = h;
+}
+
+async function generateEmailSeq() {
+  if (!emailSeqState.goal) return;
+  emailSeqState.loading = true;
+  emailSeqState.result = null;
+  renderEmailSequences(document.getElementById('csBody'));
+  try {
+    var r = await fetch((window.API || '') + '/api/studio/email-sequence', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sequence_type: emailSeqState.type, emails_count: emailSeqState.count, goal: emailSeqState.goal, audience: emailSeqState.audience })
+    });
+    emailSeqState.result = await r.json();
+  } catch(e) { console.error('[EmailSeq]', e); }
+  emailSeqState.loading = false;
+  renderEmailSequences(document.getElementById('csBody'));
+}
+
+function _escHtml(s) { return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+
 
 var csContentState = {
   platform: 'instagram',

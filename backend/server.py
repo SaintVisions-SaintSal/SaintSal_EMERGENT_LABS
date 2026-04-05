@@ -17286,7 +17286,9 @@ from routers.metering import router as metering_router
 app.include_router(verticals_router)
 app.include_router(career_router)
 from routers.career_suite import router as career_suite_router
+from routers.studio_v2 import router as studio_v2_router
 app.include_router(career_suite_router)
+app.include_router(studio_v2_router)
 app.include_router(business_router)
 app.include_router(creative_router)
 app.include_router(launchpad_router)

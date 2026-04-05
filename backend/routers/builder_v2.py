@@ -132,19 +132,52 @@ async def _openai_generate(prompt: str, system: str = ""):
 # Builder v2 — 5-Agent SSE Pipeline
 @router.post("/agent/v2")
 async def builder_v2_pipeline(request: Request):
-    """5-agent pipeline for full app generation."""
+    """5-agent pipeline for full app generation with Business DNA injection."""
     body = await request.json()
     prompt = body.get("prompt", body.get("message", ""))
     session_id = body.get("session_id", str(uuid.uuid4()))
     user_id = body.get("user_id", "anonymous")
     model = body.get("model", "auto")
+    inject_dna = body.get("inject_dna", True)
+    inject_website = body.get("inject_website", False)
+    build_type = body.get("build_type", "app")
 
     if not prompt:
         return JSONResponse({"error": "prompt is required"}, status_code=400)
 
+    # ── Phase 0: Pull Business DNA + Website Intel ──
+    dna_context = ""
+    website_context = ""
+    if inject_dna:
+        try:
+            sb = _builder_sb()
+            if sb:
+                # Try business_dna table
+                r = sb.table("business_dna").select("*").eq("user_id", user_id).limit(1).execute()
+                if r.data:
+                    dna = r.data[0]
+                    dna_context = f"\n\nBUSINESS DNA (use this to personalize the build):\n- Name: {dna.get('first_name','')} {dna.get('last_name','')}\n- Company: {dna.get('business_name','')}\n- Industry: {dna.get('industry','')}\n- Tagline: {dna.get('tagline','')}\n- Colors: Brand uses dark/gold aesthetic\n- Target: {dna.get('target_audience','')}"
+        except Exception as e:
+            print(f"[Builder] DNA injection error: {e}")
+
+    if inject_website:
+        try:
+            sb = _builder_sb()
+            if sb:
+                r = sb.table("website_crawls").select("brand_extraction,seo_audit,url").eq("user_id", user_id).order("created_at", desc=True).limit(1).execute()
+                if r.data:
+                    crawl = r.data[0]
+                    brand = crawl.get("brand_extraction", {})
+                    website_context = f"\n\nWEBSITE CONTEXT (match this brand):\n- URL: {crawl.get('url','')}\n- Brand: {brand.get('brand_name','')}\n- Colors: {json.dumps(brand.get('colors',{}))}\n- Voice: {brand.get('voice_tone','')}\n- Industry: {brand.get('industry','')}"
+        except Exception:
+            pass
+
+    enriched_prompt = prompt + dna_context + website_context
+
     builder_sessions_set(session_id, {
         "id": session_id, "user_id": user_id, "prompt": prompt,
-        "status": "running", "phase": 1, "created_at": datetime.utcnow().isoformat()
+        "status": "running", "phase": 1, "created_at": datetime.utcnow().isoformat(),
+        "business_dna": dna_context, "build_type": build_type
     })
     builder_sessions[session_id] = builder_sessions_get(session_id) or {"id": session_id, "status": "running"}
 
@@ -154,15 +187,16 @@ async def builder_v2_pipeline(request: Request):
         # Phase 1: Grok Architect
         yield f"data: {json.dumps({'event': 'agent_status', 'agent': 'grok', 'status': 'active', 'message': 'Architecting your application...'})}\n\n"
 
-        arch_system = """You are an expert software architect. Given a project description, create:
-1. A clear architecture plan
+        arch_system = """You are an expert software architect. Given a project description (which may include Business DNA and website context), create:
+1. A clear architecture plan that matches the user's brand and industry
 2. Component tree with descriptions
 3. Technology stack recommendations
-Return as JSON with keys: plan, components (array), tech_stack (object)."""
+4. Brand-matched color scheme and design direction
+Return as JSON with keys: plan, components (array), tech_stack (object), brand_direction (string)."""
 
-        plan_result = await _grok_generate(prompt, arch_system)
+        plan_result = await _grok_generate(enriched_prompt, arch_system)
         if not plan_result:
-            plan_result = await _claude_generate(prompt, arch_system)
+            plan_result = await _claude_generate(enriched_prompt, arch_system)
         if not plan_result:
             plan_result = json.dumps({"plan": "Standard web application", "components": ["App", "Header", "Main", "Footer"], "tech_stack": {"frontend": "HTML/CSS/JS", "styling": "Modern CSS"}})
 
@@ -178,14 +212,14 @@ Return as JSON with keys: plan, components (array), tech_stack (object)."""
         yield f"data: {json.dumps({'event': 'agent_status', 'agent': 'stitch', 'status': 'active', 'message': 'Designing UI screens...'})}\n\n"
 
         design_prompt = f"""Design the UI for this application:
-{prompt}
+{enriched_prompt}
 
 Architecture: {json.dumps(plan_data)}
 
-Create clean, modern HTML/CSS for each screen. Return JSON with:
+Create clean, modern HTML/CSS for each screen. If Business DNA or website context is provided, match those brand colors, fonts, and voice. Return JSON with:
 screens: [{{name, html, css}}]"""
 
-        design_result = await _claude_generate(design_prompt, "You are a world-class UI/UX designer. Create beautiful, modern designs.", "claude-sonnet-4-20250514")
+        design_result = await _claude_generate(design_prompt, "You are a world-class UI/UX designer. Create beautiful, modern designs that match the user's brand identity.", "claude-sonnet-4-20250514")
         try:
             design_data = json.loads(design_result.strip().removeprefix("```json").removesuffix("```").strip())
         except Exception:
