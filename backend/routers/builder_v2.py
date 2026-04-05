@@ -18,8 +18,66 @@ GOOGLE_STITCH_API = os.environ.get("GOOGLE_STITCH_API", "")
 VERCEL_API_ACCESS_TOKEN = os.environ.get("VERCEL_API_ACCESS_TOKEN", "")
 RENDER_API_KEY = os.environ.get("RENDER_API_KEY", "")
 
-# In-memory session store (production: use Supabase)
-builder_sessions = {}
+# ── Builder Sessions: Supabase-backed with in-memory fallback ──
+_builder_mem = {}
+
+def _builder_sb():
+    try:
+        from supabase import create_client
+        url = os.environ.get("SUPABASE_URL", "")
+        key = os.environ.get("SUPABASE_SERVICE_KEY", "")
+        if url and key:
+            return create_client(url, key)
+    except Exception:
+        pass
+    return None
+
+def builder_sessions_get(sid):
+    """Get session from Supabase, fall back to in-memory."""
+    sb = _builder_sb()
+    if sb:
+        try:
+            r = sb.table("builder_sessions").select("*").eq("id", sid).limit(1).execute()
+            if r.data:
+                row = r.data[0]
+                return {
+                    "session_id": row["id"],
+                    "prompt": row.get("prompt", ""),
+                    "status": row.get("status", "running"),
+                    "plan_data": row.get("plan_data", {}),
+                    "design_data": row.get("design_data", {}),
+                    "files": row.get("files", []),
+                    "deploy_url": row.get("deploy_url"),
+                    "business_dna": row.get("business_dna", {}),
+                }
+        except Exception:
+            pass
+    return _builder_mem.get(sid)
+
+def builder_sessions_set(sid, data):
+    """Persist session to Supabase + in-memory cache."""
+    _builder_mem[sid] = data
+    sb = _builder_sb()
+    if sb:
+        try:
+            row = {
+                "id": sid,
+                "user_id": data.get("user_id", "anonymous"),
+                "prompt": data.get("prompt", ""),
+                "status": data.get("status", "running"),
+                "plan_data": data.get("plan_data", {}),
+                "design_data": data.get("design_data", {}),
+                "files": data.get("files", []),
+                "deploy_url": data.get("deploy_url"),
+                "business_dna": data.get("business_dna", {}),
+                "updated_at": datetime.utcnow().isoformat(),
+            }
+            sb.table("builder_sessions").upsert(row, on_conflict="id").execute()
+        except Exception as e:
+            print(f"[Builder] Supabase persist failed: {e}")
+
+# Alias for backward compat  
+builder_sessions = _builder_mem
 
 
 async def _grok_generate(prompt: str, system: str = ""):
@@ -84,10 +142,11 @@ async def builder_v2_pipeline(request: Request):
     if not prompt:
         return JSONResponse({"error": "prompt is required"}, status_code=400)
 
-    builder_sessions[session_id] = {
+    builder_sessions_set(session_id, {
         "id": session_id, "user_id": user_id, "prompt": prompt,
         "status": "running", "phase": 1, "created_at": datetime.utcnow().isoformat()
-    }
+    })
+    builder_sessions[session_id] = builder_sessions_get(session_id) or {"id": session_id, "status": "running"}
 
     async def pipeline_stream():
         start_time = asyncio.get_event_loop().time()
@@ -134,6 +193,7 @@ screens: [{{name, html, css}}]"""
 
         builder_sessions[session_id]["status"] = "awaiting_approval"
         builder_sessions[session_id]["design_data"] = design_data
+        builder_sessions_set(session_id, builder_sessions[session_id])
 
         yield f"data: {json.dumps({'event': 'design_ready', 'screens': design_data.get('screens', []), 'session_id': session_id})}\n\n"
         yield f"data: {json.dumps({'event': 'agent_status', 'agent': 'stitch', 'status': 'complete', 'message': 'Designs ready for review'})}\n\n"
@@ -223,6 +283,7 @@ Return JSON: {{lint_results: [], test_results: [], suggestions: []}}"""
         elapsed = asyncio.get_event_loop().time() - start_time
         builder_sessions[session_id]["status"] = "complete"
         builder_sessions[session_id]["files"] = files_data.get("files", [])
+        builder_sessions_set(session_id, builder_sessions[session_id])
 
         yield f"data: {json.dumps({'event': 'complete', 'total_time': round(elapsed, 1), 'agents_used': ['grok', 'stitch', 'sonnet', 'opus', 'gpt5']})}\n\n"
 

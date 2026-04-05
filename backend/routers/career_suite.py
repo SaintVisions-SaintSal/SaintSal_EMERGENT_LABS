@@ -4,26 +4,36 @@ Column names match the actual Supabase schema exactly.
 """
 from fastapi import APIRouter, Request, UploadFile, File
 from fastapi.responses import JSONResponse, StreamingResponse
-import os, json, uuid, httpx, io, shutil
+import os, json, uuid, httpx, io, base64
 from datetime import datetime, timezone
 from pathlib import Path
 
 router = APIRouter(prefix="/api/career/v2", tags=["career-v2"])
 
+# ── Singleton Supabase client ──
+_supabase_client = None
 def _sb():
-    from supabase import create_client
-    url = os.environ.get("SUPABASE_URL", "")
-    key = os.environ.get("SUPABASE_SERVICE_KEY", "")
-    if not url or not key:
-        return None
-    return create_client(url, key)
+    global _supabase_client
+    if _supabase_client is None:
+        from supabase import create_client
+        url = os.environ.get("SUPABASE_URL", "")
+        key = os.environ.get("SUPABASE_SERVICE_KEY", "")
+        if url and key:
+            _supabase_client = create_client(url, key)
+    return _supabase_client
 
 def _user_id(request: Request):
-    if hasattr(request.state, 'user_id'):
+    if hasattr(request.state, 'user_id') and request.state.user_id:
         return str(request.state.user_id)
     auth = request.headers.get("authorization", "")
     if auth.startswith("Bearer "):
-        return auth.split(" ", 1)[1][:100]
+        token = auth.split(" ", 1)[1]
+        try:
+            import jwt as pyjwt
+            payload = pyjwt.decode(token, options={"verify_signature": False})
+            return payload.get("sub", "anonymous")
+        except Exception:
+            return token[:100]
     return request.query_params.get("user_id", "anonymous")
 
 def _now():
@@ -434,6 +444,77 @@ async def export_resume(resume_id: str, fmt: str, request: Request):
     return JSONResponse({"error": "Format must be 'pdf' or 'docx'"}, status_code=400)
 
 
+
+# ── STAGE COACHING + INTERVIEW PREP HELPERS ──
+
+STAGE_COACHING = {
+    "saved": {"title": "Saved — Research Phase", "tips": ["Research the company culture and recent news", "Check Glassdoor reviews and salary ranges", "Look for mutual connections on LinkedIn who can refer you", "Tailor your resume for this specific role before applying"]},
+    "applied": {"title": "Applied — Follow Up", "tips": ["Set a follow-up reminder for 5-7 business days", "Connect with the recruiter on LinkedIn with a brief note", "Continue applying to other roles — never put all eggs in one basket", "Prepare your elevator pitch in case they call unexpectedly"]},
+    "phone_screen": {"title": "Phone Screen — First Impression", "tips": ["Research the interviewer on LinkedIn", "Prepare your 60-second pitch: who you are, why this role, why this company", "Have 3-4 questions ready about the role and team", "Find a quiet space, test your phone/audio, have your resume open"]},
+    "interview_scheduled": {"title": "Interview Scheduled — Prep Time", "tips": ["Study the company's products, mission, and recent news", "Prepare STAR stories for behavioral questions", "Practice technical skills relevant to the role", "Prepare thoughtful questions about growth, team dynamics, and challenges", "Plan your outfit and travel route the day before"]},
+    "interview_completed": {"title": "Interview Done — Follow Up", "tips": ["Send a thank-you email within 24 hours to each interviewer", "Reference specific topics discussed to show engagement", "Note what went well and what to improve for next time", "If you haven't heard back in a week, send a polite check-in"]},
+    "offer_received": {"title": "Offer Received — Negotiate", "tips": ["Don't accept immediately — ask for 2-3 business days to review", "Research market rates on Levels.fyi, Glassdoor, and Blind", "Negotiate base salary, equity, signing bonus, and start date", "Get the full offer in writing before making any decisions", "Consider total compensation: base + equity + bonus + benefits"]},
+    "job_won": {"title": "Accepted — You Won!", "tips": ["Celebrate this win — you earned it!", "Send thank-you notes to everyone who helped", "Start preparing for your first 90 days", "Review the employee handbook and benefits enrollment deadlines"]},
+    "rejected": {"title": "Rejected — Learn & Move Forward", "tips": ["Ask for specific feedback on why you weren't selected", "This is NOT a reflection of your worth — it's a data point", "Update your approach based on any feedback received", "Apply to 3 new roles this week — momentum beats overthinking"]},
+}
+
+async def _generate_stage_coaching(status: str, company: str, title: str) -> dict:
+    """Return pre-built coaching guidance for each pipeline stage."""
+    coaching = STAGE_COACHING.get(status, {"title": status.replace("_", " ").title(), "tips": ["Keep pushing forward!"]})
+    return {"stage": status, "title": coaching["title"], "tips": coaching["tips"], "company": company, "role": title}
+
+async def _generate_interview_prep(company: str, title: str, user_id: str) -> dict:
+    """Auto-generate interview prep pack when user moves to interview_scheduled."""
+    prep = {
+        "company": company,
+        "role": title,
+        "prep_checklist": [
+            f"Research {company or 'the company'} — products, mission, recent news, key competitors",
+            "Prepare 5 STAR stories (Situation → Task → Action → Result)",
+            "Practice your elevator pitch out loud 3 times",
+            f"Review the {title or 'role'} job description and match your skills to each requirement",
+            "Prepare 4-5 thoughtful questions to ask the interviewer",
+            "Set up your interview space (quiet, good lighting, professional background)",
+        ],
+        "common_questions": [
+            "Tell me about yourself and why you're interested in this role",
+            f"Why {company or 'this company'}? What excites you about the mission?",
+            "Describe a time you overcame a significant challenge at work",
+            "What's your greatest professional achievement?",
+            "Where do you see yourself in 3-5 years?",
+            "How do you handle conflict with a colleague?",
+            f"What specific skills make you the right fit for {title or 'this role'}?",
+        ],
+        "power_tips": [
+            "Start every answer with the conclusion, then explain how you got there",
+            "Use specific numbers: 'increased revenue by 35%' not 'improved revenue'",
+            "Mirror the interviewer's energy and pace",
+            "It's OK to pause and think — 'Great question, let me think about that' shows confidence",
+        ]
+    }
+    # Try to generate AI-enhanced prep if we have API keys
+    try:
+        api_key = os.environ.get("ANTHROPIC_API_KEY") or os.environ.get("XAI_API_KEY", "")
+        if api_key and company:
+            async with httpx.AsyncClient(timeout=20) as hc:
+                model_url = "https://api.anthropic.com/v1/messages"
+                headers = {"x-api-key": api_key, "content-type": "application/json", "anthropic-version": "2023-06-01"}
+                r = await hc.post(model_url, headers=headers, json={
+                    "model": "claude-sonnet-4-20250514", "max_tokens": 500,
+                    "messages": [{"role": "user", "content": f"Generate 3 company-specific interview questions for a {title} role at {company}. Return only the questions as a JSON array of strings."}]
+                })
+                if r.status_code == 200:
+                    text = r.json()["content"][0]["text"]
+                    import re
+                    match = re.search(r'\[.*?\]', text, re.DOTALL)
+                    if match:
+                        extra_qs = json.loads(match.group())
+                        prep["company_specific_questions"] = extra_qs
+    except Exception:
+        pass
+    return prep
+
+
 # ── 3. JOB TRACKER (Supabase) ──
 
 @router.get("/tracker")
@@ -448,8 +529,8 @@ async def get_job_tracker(request: Request):
         for j in jobs:
             j["job_id"] = j.pop("id", "")
         kanban = {}
-        # Valid Supabase statuses: saved, applied, phone_screen, rejected
-        for status in ["saved","applied","phone_screen","rejected"]:
+        # Full pipeline: 8 stages matching Supabase CHECK constraint
+        for status in ["saved","applied","phone_screen","interview_scheduled","interview_completed","offer_received","job_won","rejected"]:
             kanban[status] = [j for j in jobs if j.get("status") == status]
         return {"kanban": kanban, "total": len(jobs), "jobs": jobs}
     except Exception as e:
@@ -508,7 +589,19 @@ async def update_tracker_job(job_id: str, request: Request):
         update["applied_date"] = _now()
     try:
         sb.table("job_applications").update(update).eq("id", job_id).eq("user_id", uid).execute()
-        return {"success": True}
+
+        # ── Stage coaching: generate guidance on status transition ──
+        new_status = update.get("status")
+        coaching = None
+        if new_status:
+            coaching = await _generate_stage_coaching(new_status, body.get("company_name", ""), body.get("job_title", ""))
+
+        # ── Auto-generate interview prep when moving to interview_scheduled ──
+        interview_prep = None
+        if new_status == "interview_scheduled":
+            interview_prep = await _generate_interview_prep(body.get("company_name", ""), body.get("job_title", ""), uid)
+
+        return {"success": True, "coaching": coaching, "interview_prep": interview_prep}
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)
 
@@ -566,7 +659,7 @@ async def add_interview(request: Request):
     try:
         sb.table("interviews").insert(interview).execute()
         try:
-            sb.table("job_applications").update({"status": "interview", "updated_at": _now()}).eq("id", interview.get("job_application_id","")).execute()
+            sb.table("job_applications").update({"status": "interview_scheduled", "updated_at": _now()}).eq("id", interview.get("job_application_id","")).execute()
         except Exception:
             pass
         return {"success": True, "interview_id": iid}
@@ -899,40 +992,51 @@ async def export_cover_letter(cl_id: str, fmt: str, request: Request):
     return JSONResponse({"error": "Format must be 'pdf' or 'docx'"}, status_code=400)
 
 
-# ── 10. FILE UPLOADS (Headshot / Background) ──
+# ── 10. FILE UPLOADS → Supabase Storage ──
 
-UPLOAD_DIR = Path("/app/backend/media_uploads/career")
-UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+CAREER_BUCKET = "career-uploads"
+
+async def _upload_to_supabase_storage(file_bytes: bytes, filename: str) -> str:
+    """Upload file to Supabase Storage and return the public URL."""
+    sb = _sb()
+    if not sb:
+        raise Exception("Supabase not configured")
+    try:
+        sb.storage.from_(CAREER_BUCKET).upload(filename, file_bytes, {"content-type": _mime(filename)})
+    except Exception as e:
+        if "Duplicate" in str(e) or "already exists" in str(e):
+            sb.storage.from_(CAREER_BUCKET).update(filename, file_bytes, {"content-type": _mime(filename)})
+        else:
+            raise
+    url = os.environ.get("SUPABASE_URL", "")
+    return f"{url}/storage/v1/object/public/{CAREER_BUCKET}/{filename}"
+
+def _mime(filename: str) -> str:
+    ext = Path(filename).suffix.lower().lstrip(".")
+    return {"jpg": "image/jpeg", "jpeg": "image/jpeg", "png": "image/png", "webp": "image/webp"}.get(ext, "application/octet-stream")
 
 @router.post("/upload/headshot")
 async def upload_headshot(file: UploadFile = File(...)):
     ext = Path(file.filename or "img.jpg").suffix.lower()
     if ext not in (".jpg", ".jpeg", ".png", ".webp"):
         return JSONResponse({"error": "Only JPG/PNG/WEBP allowed"}, status_code=400)
-    fid = str(uuid.uuid4()) + ext
-    dest = UPLOAD_DIR / fid
-    with open(dest, "wb") as f:
-        shutil.copyfileobj(file.file, f)
-    url = f"/api/career/v2/uploads/{fid}"
-    return {"success": True, "url": url, "file_id": fid}
+    fid = f"headshots/{uuid.uuid4()}{ext}"
+    content = await file.read()
+    try:
+        public_url = await _upload_to_supabase_storage(content, fid)
+        return {"success": True, "url": public_url, "file_id": fid}
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
 
 @router.post("/upload/background")
 async def upload_background(file: UploadFile = File(...)):
     ext = Path(file.filename or "img.jpg").suffix.lower()
     if ext not in (".jpg", ".jpeg", ".png", ".webp"):
         return JSONResponse({"error": "Only JPG/PNG/WEBP allowed"}, status_code=400)
-    fid = str(uuid.uuid4()) + ext
-    dest = UPLOAD_DIR / fid
-    with open(dest, "wb") as f:
-        shutil.copyfileobj(file.file, f)
-    url = f"/api/career/v2/uploads/{fid}"
-    return {"success": True, "url": url, "file_id": fid}
-
-@router.get("/uploads/{file_id}")
-async def serve_career_upload(file_id: str):
-    fpath = UPLOAD_DIR / file_id
-    if not fpath.exists():
-        return JSONResponse({"error": "File not found"}, status_code=404)
-    ext = fpath.suffix.lower()
-    ct = {"jpg": "image/jpeg", "jpeg": "image/jpeg", "png": "image/png", "webp": "image/webp"}.get(ext.lstrip("."), "application/octet-stream")
-    return StreamingResponse(open(fpath, "rb"), media_type=ct)
+    fid = f"backgrounds/{uuid.uuid4()}{ext}"
+    content = await file.read()
+    try:
+        public_url = await _upload_to_supabase_storage(content, fid)
+        return {"success": True, "url": public_url, "file_id": fid}
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)

@@ -44,7 +44,7 @@ var csState = {
   intelResult: null,
   intelLoading: false,
   // Job Tracker
-  trackerJobs: { saved: [], applied: [], phone_screen: [], rejected: [] },
+  trackerJobs: { saved: [], applied: [], phone_screen: [], interview_scheduled: [], interview_completed: [], offer_received: [], job_won: [], rejected: [] },
   trackerLoading: false,
   // Backgrounds
   bgTemplates: [],
@@ -244,10 +244,10 @@ function csTrackJob(idx) {
   fetch(CS_API + '/api/career/v2/tracker', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ job_title: job.title, company_name: job.company, job_url: job.url || '', status: 'saved', notes: job.snippet || '', job_source: job.source || 'search' })
+    body: JSON.stringify({ job_title: job.title, company_name: job.company, job_url: job.url || '', status: 'saved', notes: job.snippet || '', job_source: job.source || 'search', job_description: job.snippet || '' })
   }).then(function(r) { return r.json(); }).then(function(d) {
     if (d.success) {
-      csShowToast('Added to tracker');
+      csShowToast('Added to tracker — check the Tracker tab');
     }
   }).catch(function(e) { console.error(e); });
 }
@@ -261,48 +261,65 @@ function csTracker() {
   if (csState.trackerLoading) return csLoadingSpinner('Loading tracker...');
 
   var columns = [
-    { id: 'saved', label: 'Saved', color: '#888' },
-    { id: 'applied', label: 'Applied', color: '#4F8EF7' },
-    { id: 'phone_screen', label: 'Phone Screen', color: '#D4A843' },
-    { id: 'rejected', label: 'Rejected', color: '#e74c3c' }
+    { id: 'saved', label: 'Saved', color: '#888', icon: 'fa-bookmark' },
+    { id: 'applied', label: 'Applied', color: '#4F8EF7', icon: 'fa-paper-plane' },
+    { id: 'phone_screen', label: 'Phone Screen', color: '#D4A843', icon: 'fa-phone' },
+    { id: 'interview_scheduled', label: 'Interview', color: '#9b59b6', icon: 'fa-calendar-check' },
+    { id: 'interview_completed', label: 'Completed', color: '#1abc9c', icon: 'fa-check-circle' },
+    { id: 'offer_received', label: 'Offer', color: '#2ecc71', icon: 'fa-handshake' },
+    { id: 'job_won', label: 'Won!', color: '#00FF88', icon: 'fa-trophy' },
+    { id: 'rejected', label: 'Rejected', color: '#e74c3c', icon: 'fa-times-circle' }
   ];
 
-  html += '<div style="display:flex;gap:8px;overflow-x:auto;padding-bottom:8px;-webkit-overflow-scrolling:touch;">';
+  html += '<div data-testid="career-tracker-kanban" style="display:flex;gap:6px;overflow-x:auto;padding-bottom:8px;-webkit-overflow-scrolling:touch;">';
   columns.forEach(function(col) {
     var jobs = csState.trackerJobs[col.id] || [];
-    html += '<div style="min-width:180px;flex:1;background:var(--surface-raised,#111);border-radius:10px;padding:12px;">';
-    html += '<div style="font-size:12px;font-weight:600;color:' + col.color + ';margin-bottom:10px;display:flex;align-items:center;gap:6px;">'
-         + '<span style="width:8px;height:8px;border-radius:50%;background:' + col.color + ';display:inline-block;"></span>'
+    html += '<div style="min-width:150px;flex:1;background:var(--surface-raised,#111);border-radius:10px;padding:10px;">';
+    html += '<div style="font-size:11px;font-weight:600;color:' + col.color + ';margin-bottom:8px;display:flex;align-items:center;gap:5px;">'
+         + '<i class="fas ' + col.icon + '" style="font-size:10px;"></i> '
          + col.label + ' <span style="color:var(--text-muted);font-weight:400;">(' + jobs.length + ')</span></div>';
     if (jobs.length === 0) {
-      html += '<div style="font-size:11px;color:var(--text-muted);padding:16px 0;text-align:center;">No jobs</div>';
+      html += '<div style="font-size:10px;color:var(--text-muted);padding:12px 0;text-align:center;">—</div>';
     }
     jobs.forEach(function(job) {
-      html += '<div style="background:var(--surface-base,#0a0a0a);border-radius:8px;padding:10px;margin-bottom:6px;">';
-      html += '<div style="font-size:12px;font-weight:600;color:var(--text-primary);margin-bottom:2px;">' + _esc(job.job_title || '') + '</div>';
-      html += '<div style="font-size:11px;color:var(--accent-gold,#D4A843);margin-bottom:6px;">' + _esc(job.company || '') + '</div>';
-      html += '<div style="display:flex;gap:4px;flex-wrap:wrap;">';
-      columns.forEach(function(c2) {
-        if (c2.id !== col.id) {
-          html += '<button onclick="csUpdateJobStatus(\'' + job.id + '\',\'' + c2.id + '\')" '
-               + 'style="padding:3px 8px;border-radius:4px;border:1px solid ' + c2.color + '33;background:none;color:' + c2.color + ';font-size:9px;cursor:pointer;">'
-               + c2.label + '</button>';
-        }
-      });
+      html += '<div data-testid="tracker-job-card" style="background:var(--surface-base,#0a0a0a);border-radius:8px;padding:8px;margin-bottom:5px;border-left:3px solid ' + col.color + ';">';
+      html += '<div style="font-size:11px;font-weight:600;color:var(--text-primary);margin-bottom:2px;">' + _esc(job.job_title || '') + '</div>';
+      html += '<div style="font-size:10px;color:var(--accent-gold,#D4A843);margin-bottom:4px;">' + _esc(job.company_name || job.company || '') + '</div>';
+      html += '<div style="display:flex;gap:3px;flex-wrap:wrap;">';
+      // Show move buttons for adjacent stages only
+      var ci = columns.findIndex(function(c) { return c.id === col.id; });
+      if (ci > 0) {
+        var prev = columns[ci - 1];
+        html += '<button data-testid="move-job-' + prev.id + '" onclick="csUpdateJobStatus(\'' + (job.job_id || job.id) + '\',\'' + prev.id + '\',\'' + _esc(job.company_name || job.company || '') + '\',\'' + _esc(job.job_title || '') + '\')" '
+             + 'style="padding:2px 6px;border-radius:3px;border:1px solid ' + prev.color + '44;background:none;color:' + prev.color + ';font-size:8px;cursor:pointer;">'
+             + '<i class="fas fa-arrow-left"></i></button>';
+      }
+      if (ci < columns.length - 1) {
+        var next = columns[ci + 1];
+        html += '<button data-testid="move-job-' + next.id + '" onclick="csUpdateJobStatus(\'' + (job.job_id || job.id) + '\',\'' + next.id + '\',\'' + _esc(job.company_name || job.company || '') + '\',\'' + _esc(job.job_title || '') + '\')" '
+             + 'style="padding:2px 6px;border-radius:3px;border:1px solid ' + next.color + '44;background:none;color:' + next.color + ';font-size:8px;cursor:pointer;">'
+             + next.label + ' <i class="fas fa-arrow-right"></i></button>';
+      }
+      html += '<button onclick="csDeleteJob(\'' + (job.job_id || job.id) + '\')" '
+           + 'style="padding:2px 6px;border-radius:3px;border:1px solid #e74c3c44;background:none;color:#e74c3c;font-size:8px;cursor:pointer;margin-left:auto;">'
+           + '<i class="fas fa-trash"></i></button>';
       html += '</div></div>';
     });
     html += '</div>';
   });
   html += '</div>';
 
+  // Stage coaching display area
+  html += '<div id="csStageCoachingArea"></div>';
+
   // Quick add form
-  html += '<div style="margin-top:16px;background:var(--surface-raised,#141414);border-radius:10px;padding:16px;">';
-  html += '<div style="font-size:13px;font-weight:600;color:var(--text-primary);margin-bottom:10px;">Quick Add</div>';
-  html += '<div style="display:flex;gap:8px;flex-wrap:wrap;">';
-  html += '<input id="csTrackTitle" placeholder="Job title" style="flex:1;min-width:140px;padding:8px 12px;border-radius:6px;border:1px solid var(--border-subtle,#333);background:var(--surface-base,#0a0a0a);color:var(--text-primary);font-size:12px;">';
-  html += '<input id="csTrackCompany" placeholder="Company" style="flex:1;min-width:120px;padding:8px 12px;border-radius:6px;border:1px solid var(--border-subtle,#333);background:var(--surface-base,#0a0a0a);color:var(--text-primary);font-size:12px;">';
-  html += '<input id="csTrackUrl" placeholder="URL (optional)" style="flex:1;min-width:120px;padding:8px 12px;border-radius:6px;border:1px solid var(--border-subtle,#333);background:var(--surface-base,#0a0a0a);color:var(--text-primary);font-size:12px;">';
-  html += '<button onclick="csQuickAdd()" style="padding:8px 16px;border-radius:6px;border:none;background:var(--accent-gold,#D4A843);color:#000;font-weight:600;font-size:12px;cursor:pointer;">Add</button>';
+  html += '<div style="margin-top:12px;background:var(--surface-raised,#141414);border-radius:10px;padding:14px;">';
+  html += '<div style="font-size:12px;font-weight:600;color:var(--text-primary);margin-bottom:8px;"><i class="fas fa-plus-circle" style="color:var(--accent-gold);"></i> Quick Add</div>';
+  html += '<div style="display:flex;gap:6px;flex-wrap:wrap;">';
+  html += '<input data-testid="tracker-add-title" id="csTrackTitle" placeholder="Job title" style="flex:1;min-width:130px;padding:8px 10px;border-radius:6px;border:1px solid var(--border-subtle,#333);background:var(--surface-base,#0a0a0a);color:var(--text-primary);font-size:12px;">';
+  html += '<input data-testid="tracker-add-company" id="csTrackCompany" placeholder="Company" style="flex:1;min-width:110px;padding:8px 10px;border-radius:6px;border:1px solid var(--border-subtle,#333);background:var(--surface-base,#0a0a0a);color:var(--text-primary);font-size:12px;">';
+  html += '<input id="csTrackUrl" placeholder="URL (optional)" style="flex:1;min-width:110px;padding:8px 10px;border-radius:6px;border:1px solid var(--border-subtle,#333);background:var(--surface-base,#0a0a0a);color:var(--text-primary);font-size:12px;">';
+  html += '<button data-testid="tracker-add-btn" onclick="csQuickAdd()" style="padding:8px 16px;border-radius:6px;border:none;background:var(--accent-gold,#D4A843);color:#000;font-weight:600;font-size:12px;cursor:pointer;">Add</button>';
   html += '</div></div>';
 
   return html;
@@ -312,18 +329,74 @@ function csLoadTracker() {
   csState.trackerLoading = true;
   renderCareerSuite();
   fetch(CS_API + '/api/career/v2/tracker').then(function(r) { return r.json(); }).then(function(data) {
-    csState.trackerJobs = data.kanban || { saved: [], applied: [], phone_screen: [], rejected: [] };
+    csState.trackerJobs = data.kanban || { saved: [], applied: [], phone_screen: [], interview_scheduled: [], interview_completed: [], offer_received: [], job_won: [], rejected: [] };
     csState.trackerLoading = false;
     renderCareerSuite();
   }).catch(function() { csState.trackerLoading = false; renderCareerSuite(); });
 }
 
-function csUpdateJobStatus(jobId, status) {
+function csUpdateJobStatus(jobId, status, company, title) {
   fetch(CS_API + '/api/career/v2/tracker/' + jobId, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ status: status })
-  }).then(function() { csLoadTracker(); });
+    body: JSON.stringify({ status: status, company_name: company || '', job_title: title || '' })
+  }).then(function(r) { return r.json(); }).then(function(data) {
+    csLoadTracker();
+    // Show stage coaching popup
+    if (data.coaching) {
+      csShowStageCoaching(data.coaching, data.interview_prep);
+    }
+  }).catch(function() { csLoadTracker(); });
+}
+
+function csShowStageCoaching(coaching, interviewPrep) {
+  var area = document.getElementById('csStageCoachingArea');
+  if (!area) return;
+  var h = '<div data-testid="stage-coaching-popup" style="background:rgba(212,175,55,0.06);border:1px solid rgba(212,175,55,0.25);border-radius:12px;padding:16px;margin-top:12px;animation:fadeIn 0.3s ease;">';
+  h += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">';
+  h += '<div style="font-size:12px;font-weight:700;color:var(--accent-gold,#D4A843);"><i class="fas fa-lightbulb"></i> SAL Coaching — ' + _esc(coaching.title || coaching.stage) + '</div>';
+  h += '<button onclick="document.getElementById(\'csStageCoachingArea\').innerHTML=\'\'" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:14px;"><i class="fas fa-times"></i></button>';
+  h += '</div>';
+  if (coaching.tips && coaching.tips.length) {
+    coaching.tips.forEach(function(tip) {
+      h += '<div style="font-size:11px;color:var(--text-secondary);padding:4px 0;padding-left:16px;position:relative;line-height:1.5;">';
+      h += '<i class="fas fa-check" style="color:#2ecc71;position:absolute;left:0;top:6px;font-size:9px;"></i> ' + _esc(tip);
+      h += '</div>';
+    });
+  }
+  // Interview prep pack
+  if (interviewPrep) {
+    h += '<div style="margin-top:14px;padding-top:12px;border-top:1px solid rgba(212,175,55,0.15);">';
+    h += '<div style="font-size:12px;font-weight:700;color:#9b59b6;margin-bottom:8px;"><i class="fas fa-graduation-cap"></i> Auto-Generated Interview Prep</div>';
+    if (interviewPrep.prep_checklist) {
+      h += '<div style="font-size:10px;font-weight:600;color:var(--text-muted);margin-bottom:4px;">PREP CHECKLIST</div>';
+      interviewPrep.prep_checklist.forEach(function(item) {
+        h += '<div style="font-size:11px;color:var(--text-secondary);padding:2px 0;padding-left:16px;position:relative;">';
+        h += '<input type="checkbox" style="position:absolute;left:0;top:3px;accent-color:#D4A843;"> ' + _esc(item) + '</div>';
+      });
+    }
+    if (interviewPrep.common_questions) {
+      h += '<div style="font-size:10px;font-weight:600;color:var(--text-muted);margin-top:10px;margin-bottom:4px;">COMMON QUESTIONS</div>';
+      interviewPrep.common_questions.forEach(function(q, i) {
+        h += '<div style="font-size:11px;color:var(--text-secondary);padding:3px 0;">' + (i+1) + '. ' + _esc(q) + '</div>';
+      });
+    }
+    if (interviewPrep.company_specific_questions) {
+      h += '<div style="font-size:10px;font-weight:600;color:#9b59b6;margin-top:10px;margin-bottom:4px;">COMPANY-SPECIFIC (AI-GENERATED)</div>';
+      interviewPrep.company_specific_questions.forEach(function(q, i) {
+        h += '<div style="font-size:11px;color:var(--text-secondary);padding:3px 0;"><i class="fas fa-brain" style="color:#9b59b6;font-size:9px;"></i> ' + _esc(q) + '</div>';
+      });
+    }
+    if (interviewPrep.power_tips) {
+      h += '<div style="font-size:10px;font-weight:600;color:#D4A843;margin-top:10px;margin-bottom:4px;">POWER TIPS</div>';
+      interviewPrep.power_tips.forEach(function(tip) {
+        h += '<div style="font-size:11px;color:var(--accent-gold);padding:2px 0;"><i class="fas fa-bolt" style="font-size:9px;"></i> ' + _esc(tip) + '</div>';
+      });
+    }
+    h += '</div>';
+  }
+  h += '</div>';
+  area.innerHTML = h;
 }
 
 function csQuickAdd() {
@@ -619,10 +692,13 @@ async function csUploadCareerFile(input, type) {
     var r = await fetch(CS_API + '/api/career/v2/upload/' + type, { method: 'POST', body: formData });
     var data = await r.json();
     if (data.url) {
-      if (type === 'headshot') csState.headshotUrl = CS_API + data.url;
-      else csState.backgroundUrl = CS_API + data.url;
+      // URL is now a full Supabase Storage public URL
+      if (type === 'headshot') csState.headshotUrl = data.url;
+      else csState.backgroundUrl = data.url;
       csShowToast(type.charAt(0).toUpperCase() + type.slice(1) + ' uploaded');
       renderCareerSuite();
+    } else {
+      csShowToast('Upload failed: ' + (data.error || 'Unknown error'));
     }
   } catch(e) { console.error('[Career] Upload error:', e); csShowToast('Upload failed'); }
 }
