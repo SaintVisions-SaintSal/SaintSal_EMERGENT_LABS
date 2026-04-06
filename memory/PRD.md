@@ -1,85 +1,82 @@
-# SaintSal Labs Platform — Product Requirements Document
+# SaintSal Labs Platform — PRD
 
 ## Original Problem Statement
-Build a full-stack business intelligence platform (SaintSal Labs) with 8 intelligence verticals, Builder v2, Career & Business suites, Creative Studio, Launch Pad, CookinCards, and Pricing/Metering. Retain dark/gold aesthetic. FastAPI backend + Vanilla JS frontend.
+Extend the SaintSal Labs platform with 8 intelligence verticals, Builder v2 (5-agent pipeline), Career & Business Intelligence suites, Creative Studio, Launch Pad (Business Formation), CookinCards, and Pricing/Metering. Retain existing dark/gold aesthetic. Wire Supabase for data persistence. Integrate 3rd party APIs.
 
 ## Architecture
-- **Backend**: FastAPI on port 8001 (`/app/backend/server.py` + `/app/backend/routers/`)
-- **Frontend**: Vanilla JS served from `/app/frontend/public/` via React wrapper
-- **Database**: Supabase (primary), MongoDB (legacy)
-- **Payments**: Stripe (live keys configured)
-- **CRM**: Go High Level (connected)
-- **APIs**: RentCast, PropertyAPI, Ximilar, GoDaddy, CorpNet, Alpaca, Exa/Tavily
+- **Backend**: FastAPI (Python) on port 8001, modular routers in `/app/backend/routers/`
+- **Frontend**: Vanilla JS monolith (`app.js` ~15k lines) served from `/app/frontend/public/`
+- **Database**: Supabase (PostgreSQL, Auth, Storage)
+- **Auth**: Supabase Auth with JWT, auto-confirm on login
+- **Admin**: Super Admin = ryan@cookin.io (full user/tier/account management)
 
 ## What's Been Implemented
 
-### Phase 0: Infrastructure (DONE)
-- Cloned repo, adapted to Emergent environment
-- Modular backend routers for all verticals
-- Supabase + GHL + Stripe keys configured
+### Phase 1-3: Core Platform (DONE)
+- Full-stack FastAPI + Vanilla JS with Supabase Auth/Storage
+- Career Suite: Resume Builder, Cover Letter, Email Signatures, Job Search (Tavily), Job Tracker Kanban
+- Builder v2 with 5-agent pipeline and Business DNA injection
+- Real Estate, Medical, Finance, Sports, News, CookinCards verticals
+- Voice AI Engine
+- Admin Control Panel (Super Admin w/ user management, health checks, order fulfillment)
+- Command Palette (Cmd+K)
+- Metering/Pricing system
 
-### Phase 1: Frontend Restoration (DONE)
-- Cmd+K command palette, Career/Business/Real Estate tabs restored
-- CookinCards, LaunchPad, Social Studio UI built
+### Phase 4-6: Career Suite Polish (DONE — Apr 5, 2026)
+- Resume PDF/DOCX export (working E2E)
+- Cover Letter PDF/DOCX export (working E2E)
+- Email Signature "Copy HTML" button
+- DNA autofill into Resume Builder
+- Job Search returning real Tavily results
+- Kanban expanded to 14 statuses (wishlist, networking, saved, applied, phone_screen, assessment, interview_scheduled, interview_completed, reference_check, offer_received, negotiating, job_won, rejected, withdrawn)
+- Stage coaching tips for all 14 statuses
+- Supabase Storage bucket for career uploads (headshots/backgrounds)
+- Auth bug fix (auto-confirm emails, password reset for ryan@cookin.io)
+- Career profile Supabase persistence
 
-### Phase 2: Metering System (DONE)
-- 5-tier pricing, compute levels, feature gating, rate limiting
-- Stripe checkout, 65+ integrations marketplace
+### Phase 7-9: Creative Studio (IN PROGRESS — Apr 6, 2026)
+- Backend: `studio_v2.py` router with Website Intel + Campaign Builder endpoints (DONE)
+- Supabase tables: website_crawls, marketing_campaigns, generated_assets, builder_sessions, email_sequences (DONE — migrated)
+- Kanban status constraint migration (DONE — 14 statuses)
+- Frontend UI stubs for Website Intel + Campaign Builder tabs in app.js (DONE)
+- Frontend UI logic (fetch + render) needs flesh out
 
-### Phase 3: Business DNA + Revenue System (DONE — April 3, 2026)
-- 5-step DNA onboarding wizard, SAL HQ Dashboard
-- Credit limit modals, top-up checkout, GHL env fix
+## Database Tables (Supabase)
+### Existing
+- profiles, resumes, cover_letters, email_signatures, job_applications, job_saved_searches
+- conversations, business_dna, compute_usage, marketing_content
 
-### Phase 4: Career Suite Supabase Migration (DONE — April 4, 2026)
-- Full Supabase migration (all Career data off MongoDB)
-- Resume/Cover Letter PDF/DOCX export
-- DNA autofill, headshot/background upload, job tracker kanban
-
-### Phase 5: Auth Fix (DONE — April 4, 2026)
-- Auto-confirm emails on signup AND login via Supabase Admin API
-- ryan@cookin.io password reset, topbar Sign In button
-
-### Phase 6: Career Suite P0 Complete (DONE — April 5, 2026)
-- **Resume PDF/DOCX downloads**: Save & AI Enhance → PDF/DOCX export buttons appear
-- **Cover Letter PDF/DOCX downloads**: Generate → Save & Export → PDF/DOCX buttons
-- **Email Signature Copy HTML**: One-click clipboard copy
-- **Job Search**: Exa-powered with Monster/Indeed/LinkedIn/Glassdoor domain filters, save to tracker
-- **8-Column Kanban**: saved → applied → phone_screen → interview_scheduled → interview_completed → offer_received → job_won → rejected
-- **DNA Autofill**: Auto-populates resume from Business DNA on tab open
-- **Supabase Storage uploads**: Headshot/background → career-uploads bucket (persistent across deploys)
-- **Interview Prep Auto-Generation**: Moving to interview_scheduled triggers prep pack (checklist, common Qs, company-specific AI Qs, power tips)
-- **Stage Coaching**: Every pipeline transition triggers SAL guidance popup with tips
-- **Builder Session Persistence**: Sessions saved to Supabase (in-memory fallback)
-- **Architecture fixes**: Singleton Supabase client, JWT user_id extraction, interview status constraint, dead pymongo/motor removed
-
-## Upcoming — Builder + Creative Studio Enhancement
-
-### Phase 7: Website Intelligence Engine (NEXT)
-- POST /api/studio/website-intel: crawl URL → extract brand, colors, fonts, SEO audit, content analysis
-- Save to Brand DNA, use as context for all generation
-
-### Phase 8: DNA-Powered Builder
-- Inject Business DNA + website crawl into Builder v2 pipeline
-- Brand-matched builds (colors, fonts, voice)
-- Deploy to Vercel + Cloudflare Pages + Render static
-
-### Phase 9: Marketing Campaign Builder
-- Full multi-platform campaign generation
-- Content calendar, email sequences, ad creatives
-- KPI targets and budget allocation
-
-### Phase 10: Enhanced Creative Studio
-- Multi-provider image generation (DALL-E 3, Flux, Runway)
-- Email Sequence Builder
-- Ad Creative Generator
-- Analytics dashboard
-
-### Supabase Tables Needed
+### New (Phase 7-9 — Apr 6, 2026)
 - website_crawls, marketing_campaigns, generated_assets, builder_sessions, email_sequences
 
-## P2 — Backlog
-- Investment & Lending Portfolios (Alpaca API)
-- iOS app sync, ElevenLabs voice agent
-- White-label / HACP provisioning
+## Key API Endpoints
+- `POST /api/auth/login` — Login with auto-confirm
+- `GET /api/career/v2/tracker` — 14-status Kanban
+- `GET /api/career/v2/resumes/{id}/export/{fmt}` — Resume PDF/DOCX
+- `GET /api/career/v2/cover-letters/{id}/export/{fmt}` — Cover Letter PDF/DOCX
+- `GET /api/career/jobs/search` — Tavily job search
+- `POST /api/studio/website-intel` — Website crawl + brand extraction
+- `POST /api/studio/campaigns/generate` — AI campaign generation
+- `GET /api/admin/check` — Admin access verification
+- `GET /api/admin/users` — User management (Super Admin)
+
+## Upcoming Tasks (Prioritized)
+### P0 — Current Focus
+- Flesh out Website Intel frontend (render crawl results, brand DNA display)
+- Flesh out Campaign Builder frontend (strategy, calendar, email sequence display)
+- E2E test Website Intel crawl flow with Tavily
+
+### P1 — Next
+- Enhanced image generation pipeline (multi-provider: DALL-E, Flux, Runway)
+- Email Sequence Builder API & UI
+- Ad Creative Generator API & UI
+- Rate limiting on AI enhancement endpoints
+
+### P2 — Future
+- Analytics dashboard for campaigns
+- A/B testing for ad variants
+- GHL integration for email sequences
+- Deploy to Cloudflare Pages + custom domains
+- Live data feeds + tickers
+- Investment & Lending Portfolios
 - Smart Memory System (pgvector)
-- Rate limiting on AI endpoints (metering integration)
