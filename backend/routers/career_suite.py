@@ -448,14 +448,20 @@ async def export_resume(resume_id: str, fmt: str, request: Request):
 # ── STAGE COACHING + INTERVIEW PREP HELPERS ──
 
 STAGE_COACHING = {
+    "wishlist": {"title": "Wishlist — Dream Big", "tips": ["Add companies and roles you're excited about — even if they feel like a stretch", "Set a goal to research one wishlist company per week", "Follow these companies on LinkedIn and Twitter for insider intel", "Identify 2-3 people at each company you could reach out to"]},
+    "networking": {"title": "Networking — Build Bridges", "tips": ["Send a personalized LinkedIn message — NOT a generic connect request", "Ask for a 15-minute informational interview, not a job", "Mention something specific about their work that impressed you", "Follow up with a thank-you note within 24 hours of any conversation"]},
     "saved": {"title": "Saved — Research Phase", "tips": ["Research the company culture and recent news", "Check Glassdoor reviews and salary ranges", "Look for mutual connections on LinkedIn who can refer you", "Tailor your resume for this specific role before applying"]},
     "applied": {"title": "Applied — Follow Up", "tips": ["Set a follow-up reminder for 5-7 business days", "Connect with the recruiter on LinkedIn with a brief note", "Continue applying to other roles — never put all eggs in one basket", "Prepare your elevator pitch in case they call unexpectedly"]},
     "phone_screen": {"title": "Phone Screen — First Impression", "tips": ["Research the interviewer on LinkedIn", "Prepare your 60-second pitch: who you are, why this role, why this company", "Have 3-4 questions ready about the role and team", "Find a quiet space, test your phone/audio, have your resume open"]},
+    "assessment": {"title": "Assessment — Show Your Skills", "tips": ["Read the instructions twice before starting any timed assessment", "For take-home projects, spend 20% of time on planning before coding", "Ask clarifying questions — it shows thoroughness, not weakness", "Document your thought process and trade-offs in comments or a README"]},
     "interview_scheduled": {"title": "Interview Scheduled — Prep Time", "tips": ["Study the company's products, mission, and recent news", "Prepare STAR stories for behavioral questions", "Practice technical skills relevant to the role", "Prepare thoughtful questions about growth, team dynamics, and challenges", "Plan your outfit and travel route the day before"]},
     "interview_completed": {"title": "Interview Done — Follow Up", "tips": ["Send a thank-you email within 24 hours to each interviewer", "Reference specific topics discussed to show engagement", "Note what went well and what to improve for next time", "If you haven't heard back in a week, send a polite check-in"]},
+    "reference_check": {"title": "Reference Check — Almost There", "tips": ["Heads up your references — tell them the role, company, and what to highlight", "Provide references with your updated resume so they speak to relevant achievements", "A reference check usually means you're the top candidate — stay confident", "Keep applying elsewhere until you have a signed offer letter"]},
     "offer_received": {"title": "Offer Received — Negotiate", "tips": ["Don't accept immediately — ask for 2-3 business days to review", "Research market rates on Levels.fyi, Glassdoor, and Blind", "Negotiate base salary, equity, signing bonus, and start date", "Get the full offer in writing before making any decisions", "Consider total compensation: base + equity + bonus + benefits"]},
+    "negotiating": {"title": "Negotiating — Play Smart", "tips": ["Always negotiate from a position of data, not emotion", "Lead with enthusiasm: 'I'm thrilled about the role — I'd like to discuss the comp'", "Ask for the top of your range — they'll negotiate down, not up", "Don't reveal your current salary — focus on market rate for the role", "Consider non-monetary perks: remote days, PTO, learning budget, title"]},
     "job_won": {"title": "Accepted — You Won!", "tips": ["Celebrate this win — you earned it!", "Send thank-you notes to everyone who helped", "Start preparing for your first 90 days", "Review the employee handbook and benefits enrollment deadlines"]},
     "rejected": {"title": "Rejected — Learn & Move Forward", "tips": ["Ask for specific feedback on why you weren't selected", "This is NOT a reflection of your worth — it's a data point", "Update your approach based on any feedback received", "Apply to 3 new roles this week — momentum beats overthinking"]},
+    "withdrawn": {"title": "Withdrawn — Your Choice", "tips": ["Document why you withdrew — it helps refine your criteria", "Send a gracious withdrawal email to the recruiter", "Leave the door open: 'I'd love to stay connected for future opportunities'", "Redirect your energy to the remaining active opportunities"]},
 }
 
 async def _generate_stage_coaching(status: str, company: str, title: str) -> dict:
@@ -529,8 +535,8 @@ async def get_job_tracker(request: Request):
         for j in jobs:
             j["job_id"] = j.pop("id", "")
         kanban = {}
-        # Full pipeline: 8 stages matching Supabase CHECK constraint
-        for status in ["saved","applied","phone_screen","interview_scheduled","interview_completed","offer_received","job_won","rejected"]:
+        # Full pipeline: 14 stages matching Supabase CHECK constraint
+        for status in ["wishlist","networking","saved","applied","phone_screen","assessment","interview_scheduled","interview_completed","reference_check","offer_received","negotiating","job_won","rejected","withdrawn"]:
             kanban[status] = [j for j in jobs if j.get("status") == status]
         return {"kanban": kanban, "total": len(jobs), "jobs": jobs}
     except Exception as e:

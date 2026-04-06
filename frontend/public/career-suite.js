@@ -44,7 +44,7 @@ var csState = {
   intelResult: null,
   intelLoading: false,
   // Job Tracker
-  trackerJobs: { saved: [], applied: [], phone_screen: [], interview_scheduled: [], interview_completed: [], offer_received: [], job_won: [], rejected: [] },
+  trackerJobs: { wishlist: [], networking: [], saved: [], applied: [], phone_screen: [], assessment: [], interview_scheduled: [], interview_completed: [], reference_check: [], offer_received: [], negotiating: [], job_won: [], rejected: [], withdrawn: [] },
   trackerLoading: false,
   // Backgrounds
   bgTemplates: [],
@@ -261,14 +261,20 @@ function csTracker() {
   if (csState.trackerLoading) return csLoadingSpinner('Loading tracker...');
 
   var columns = [
+    { id: 'wishlist', label: 'Wishlist', color: '#a78bfa', icon: 'fa-star' },
+    { id: 'networking', label: 'Networking', color: '#38bdf8', icon: 'fa-users' },
     { id: 'saved', label: 'Saved', color: '#888', icon: 'fa-bookmark' },
     { id: 'applied', label: 'Applied', color: '#4F8EF7', icon: 'fa-paper-plane' },
     { id: 'phone_screen', label: 'Phone Screen', color: '#D4A843', icon: 'fa-phone' },
+    { id: 'assessment', label: 'Assessment', color: '#f59e0b', icon: 'fa-tasks' },
     { id: 'interview_scheduled', label: 'Interview', color: '#9b59b6', icon: 'fa-calendar-check' },
     { id: 'interview_completed', label: 'Completed', color: '#1abc9c', icon: 'fa-check-circle' },
+    { id: 'reference_check', label: 'Ref Check', color: '#06b6d4', icon: 'fa-user-check' },
     { id: 'offer_received', label: 'Offer', color: '#2ecc71', icon: 'fa-handshake' },
+    { id: 'negotiating', label: 'Negotiating', color: '#eab308', icon: 'fa-balance-scale' },
     { id: 'job_won', label: 'Won!', color: '#00FF88', icon: 'fa-trophy' },
-    { id: 'rejected', label: 'Rejected', color: '#e74c3c', icon: 'fa-times-circle' }
+    { id: 'rejected', label: 'Rejected', color: '#e74c3c', icon: 'fa-times-circle' },
+    { id: 'withdrawn', label: 'Withdrawn', color: '#6b7280', icon: 'fa-undo' }
   ];
 
   html += '<div data-testid="career-tracker-kanban" style="display:flex;gap:6px;overflow-x:auto;padding-bottom:8px;-webkit-overflow-scrolling:touch;">';
@@ -329,7 +335,7 @@ function csLoadTracker() {
   csState.trackerLoading = true;
   renderCareerSuite();
   fetch(CS_API + '/api/career/v2/tracker').then(function(r) { return r.json(); }).then(function(data) {
-    csState.trackerJobs = data.kanban || { saved: [], applied: [], phone_screen: [], interview_scheduled: [], interview_completed: [], offer_received: [], job_won: [], rejected: [] };
+    csState.trackerJobs = data.kanban || { wishlist: [], networking: [], saved: [], applied: [], phone_screen: [], assessment: [], interview_scheduled: [], interview_completed: [], reference_check: [], offer_received: [], negotiating: [], job_won: [], rejected: [], withdrawn: [] };
     csState.trackerLoading = false;
     renderCareerSuite();
   }).catch(function() { csState.trackerLoading = false; renderCareerSuite(); });

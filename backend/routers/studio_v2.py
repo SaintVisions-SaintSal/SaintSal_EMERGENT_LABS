@@ -172,10 +172,10 @@ Be actionable with recommendations."""
     except Exception as e:
         print(f"[WebIntel] Claude analysis error: {e}")
 
-    # Phase 3: Save to Supabase
+    # Phase 3: Save to Supabase (only if user is authenticated with valid UUID)
     sb = _sb()
     saved = False
-    if sb:
+    if sb and uid != "anonymous":
         try:
             sb.table("website_crawls").insert({
                 "id": crawl_id,
@@ -184,28 +184,12 @@ Be actionable with recommendations."""
                 "brand_extraction": brand_extraction,
                 "seo_audit": seo_audit,
                 "content_analysis": content_analysis,
-                "raw_html": page_content[:50000],
+                "marketing_opportunities": marketing_opportunities,
                 "crawl_status": "completed"
             }).execute()
             saved = True
         except Exception as e:
             print(f"[WebIntel] Supabase save error: {e}")
-
-    # Phase 4: Also save to MongoDB for RAG
-    try:
-        from pymongo import MongoClient
-        mongo_url = os.environ.get("MONGO_URL", "")
-        if mongo_url:
-            mc = MongoClient(mongo_url)
-            db = mc[os.environ.get("DB_NAME", "saintsallabs")]
-            db.website_crawls.insert_one({
-                "crawl_id": crawl_id, "user_id": uid, "url": url,
-                "brand_extraction": brand_extraction, "seo_audit": seo_audit,
-                "content_analysis": content_analysis, "marketing_opportunities": marketing_opportunities,
-                "created_at": _now()
-            })
-    except Exception:
-        pass
 
     return {
         "crawl_id": crawl_id,
@@ -365,11 +349,11 @@ Generate at least 2 ad creatives per ad platform."""
         print(f"[Campaign] Generation error: {e}")
         return JSONResponse({"error": str(e)}, status_code=500)
 
-    # Save to Supabase
+    # Save to Supabase (only if user is authenticated)
     campaign_id = str(uuid.uuid4())
     sb = _sb()
     saved = False
-    if sb:
+    if sb and uid != "anonymous":
         try:
             sb.table("marketing_campaigns").insert({
                 "id": campaign_id,
@@ -390,19 +374,6 @@ Generate at least 2 ad creatives per ad platform."""
             saved = True
         except Exception as e:
             print(f"[Campaign] Supabase save error: {e}")
-
-    # MongoDB backup
-    try:
-        from pymongo import MongoClient
-        mongo_url = os.environ.get("MONGO_URL", "")
-        if mongo_url:
-            mc = MongoClient(mongo_url)
-            db = mc[os.environ.get("DB_NAME", "saintsallabs")]
-            db.marketing_campaigns.insert_one({
-                "campaign_id": campaign_id, "user_id": uid, **campaign_data, "created_at": _now()
-            })
-    except Exception:
-        pass
 
     return {
         "campaign_id": campaign_id,
@@ -499,10 +470,11 @@ Return JSON:
     # Save
     seq_id = str(uuid.uuid4())
     sb = _sb()
-    if sb:
+    if sb and uid != "anonymous":
         try:
             sb.table("email_sequences").insert({
                 "id": seq_id, "user_id": uid, "sequence_type": seq_type,
+                "sequence_name": f"{seq_type.replace('_',' ').title()} Sequence",
                 "goal": goal, "emails": result.get("sequence", []), "status": "draft"
             }).execute()
         except Exception:
