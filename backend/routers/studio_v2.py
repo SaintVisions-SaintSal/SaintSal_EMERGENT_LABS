@@ -191,10 +191,56 @@ Be actionable with recommendations."""
         except Exception as e:
             print(f"[WebIntel] Supabase save error: {e}")
 
+    # Phase 4: Auto-populate Business DNA from brand extraction
+    dna_saved = False
+    if sb and uid != "anonymous" and brand_extraction:
+        try:
+            brand = brand_extraction
+            dna_profile = {
+                "user_id": uid,
+                "business_name": brand.get("brand_name", ""),
+                "industry": brand.get("industry", ""),
+                "tagline": brand.get("tagline", ""),
+                "value_proposition": brand.get("value_proposition", ""),
+                "target_audience": brand.get("target_audience", ""),
+                "products_services": brand.get("products_services", []),
+                "voice_tone": brand.get("voice_tone", ""),
+                "brand_colors": brand.get("colors", {}),
+                "social_links": brand.get("social_links", {}),
+                "cta_patterns": brand.get("cta_patterns", []),
+                "website_url": url,
+                "seo_score": seo_audit.get("seo_score", 0),
+                "content_strengths": content_analysis.get("strengths", []),
+                "marketing_opportunities": marketing_opportunities,
+                "source": "website_intel_crawl",
+                "crawl_id": crawl_id,
+                "updated_at": _now()
+            }
+            # Upsert into business_dna table
+            existing = sb.table("business_dna").select("id").eq("user_id", uid).limit(1).execute()
+            if existing.data:
+                sb.table("business_dna").update(dna_profile).eq("user_id", uid).execute()
+            else:
+                dna_profile["id"] = str(uuid.uuid4())
+                sb.table("business_dna").insert(dna_profile).execute()
+            dna_saved = True
+            print(f"[WebIntel] Business DNA auto-populated for {uid} from {url}")
+        except Exception as e:
+            print(f"[WebIntel] DNA auto-save error: {e}")
+            # Fallback: save to in-memory cache
+            try:
+                import importlib
+                server_mod = importlib.import_module("server")
+                if hasattr(server_mod, '_business_dna_cache'):
+                    server_mod._business_dna_cache[uid] = dna_profile
+            except Exception:
+                pass
+
     return {
         "crawl_id": crawl_id,
         "url": url,
         "saved_to_supabase": saved,
+        "dna_auto_populated": dna_saved,
         "brand_extraction": brand_extraction,
         "seo_audit": seo_audit,
         "content_analysis": content_analysis,

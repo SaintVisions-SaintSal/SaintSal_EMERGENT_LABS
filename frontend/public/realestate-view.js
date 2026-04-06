@@ -17,6 +17,12 @@ var reState = {
   dealResult: null,
   chatMessages: [],
   chatLoading: false,
+  viewMode: 'grid',            // 'grid' | 'map'
+  mapInstance: null,
+  mapMarkers: [],
+  userLocation: null,
+  locationWelcomeShown: false,
+  selectedPropertyIdx: null,
 };
 
 /* ─── Tab Navigation ──────────────────────────────────────────────── */
@@ -94,14 +100,138 @@ function reRenderSearchResults(source) {
     return;
   }
   var html = '<div class="re-results-header"><span>' + results.length + ' properties found</span>' +
-    (source ? '<span class="re-source-badge">via ' + escapeHtml(source === 'rentcast' ? 'RentCast' : source === 'propertyapi' ? 'PropertyAPI' : source) + '</span>' : '') +
+    '<div style="display:flex;gap:6px;align-items:center;">' +
+      (source ? '<span class="re-source-badge">via ' + escapeHtml(source === 'rentcast' ? 'RentCast' : source === 'propertyapi' ? 'PropertyAPI' : source) + '</span>' : '') +
+      '<button data-testid="re-toggle-grid" onclick="reSetViewMode(\'grid\')" style="padding:4px 10px;border-radius:6px;border:1px solid ' + (reState.viewMode === 'grid' ? '#D4A843' : 'rgba(255,255,255,0.1)') + ';background:' + (reState.viewMode === 'grid' ? 'rgba(212,168,67,0.15)' : 'transparent') + ';color:' + (reState.viewMode === 'grid' ? '#D4A843' : '#888') + ';font-size:11px;cursor:pointer;font-weight:700;"><i class="fas fa-th-large"></i> Grid</button>' +
+      '<button data-testid="re-toggle-map" onclick="reSetViewMode(\'map\')" style="padding:4px 10px;border-radius:6px;border:1px solid ' + (reState.viewMode === 'map' ? '#D4A843' : 'rgba(255,255,255,0.1)') + ';background:' + (reState.viewMode === 'map' ? 'rgba(212,168,67,0.15)' : 'transparent') + ';color:' + (reState.viewMode === 'map' ? '#D4A843' : '#888') + ';font-size:11px;cursor:pointer;font-weight:700;"><i class="fas fa-map-marker-alt"></i> Map</button>' +
+    '</div>' +
     '</div>';
-  html += '<div class="re-property-grid">';
-  results.forEach(function(p, idx) {
-    html += reRenderPropertyCard(p, idx, 'sale');
+
+  if (reState.viewMode === 'map') {
+    html += '<div id="reMapContainer" data-testid="re-map-container" style="width:100%;height:400px;border-radius:12px;overflow:hidden;margin-bottom:16px;border:1px solid rgba(212,168,67,0.2);"></div>';
+    html += '<div class="re-property-grid">';
+    results.forEach(function(p, idx) {
+      html += reRenderPropertyCard(p, idx, 'sale');
+    });
+    html += '</div>';
+    el.innerHTML = html;
+    setTimeout(function() { reInitMap(results); }, 100);
+  } else {
+    html += '<div class="re-property-grid">';
+    results.forEach(function(p, idx) {
+      html += reRenderPropertyCard(p, idx, 'sale');
+    });
+    html += '</div>';
+    el.innerHTML = html;
+  }
+}
+
+function reSetViewMode(mode) {
+  reState.viewMode = mode;
+  reRenderSearchResults();
+}
+
+function reInitMap(properties) {
+  var mapEl = document.getElementById('reMapContainer');
+  if (!mapEl) return;
+
+  // Poll for Google Maps to load (async defer script)
+  if (typeof google === 'undefined' || !google.maps) {
+    mapEl.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#888;font-size:13px;"><i class="fas fa-spinner fa-spin" style="margin-right:8px;"></i> Loading Google Maps...</div>';
+    var attempts = 0;
+    var poll = setInterval(function() {
+      attempts++;
+      if (typeof google !== 'undefined' && google.maps) {
+        clearInterval(poll);
+        reInitMap(properties);
+      } else if (attempts > 30) {
+        clearInterval(poll);
+        mapEl.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#888;font-size:13px;">Google Maps unavailable. Try refreshing.</div>';
+      }
+    }, 500);
+    return;
+  }
+
+  var darkStyle = [
+    {elementType:"geometry",stylers:[{color:"#1d1d1d"}]},
+    {elementType:"labels.text.stroke",stylers:[{color:"#1d1d1d"}]},
+    {elementType:"labels.text.fill",stylers:[{color:"#8a8a8a"}]},
+    {featureType:"road",elementType:"geometry",stylers:[{color:"#2c2c2c"}]},
+    {featureType:"water",elementType:"geometry",stylers:[{color:"#0e1626"}]},
+    {featureType:"poi",elementType:"geometry",stylers:[{color:"#1a1a1a"}]},
+    {featureType:"transit",stylers:[{visibility:"off"}]}
+  ];
+
+  // Find center from properties with coordinates
+  var lat = 39.8283, lng = -98.5795; // default US center
+  var hasCoords = false;
+  for (var i = 0; i < properties.length; i++) {
+    if (properties[i].latitude && properties[i].longitude) {
+      lat = properties[i].latitude;
+      lng = properties[i].longitude;
+      hasCoords = true;
+      break;
+    }
+  }
+
+  var map = new google.maps.Map(mapEl, {
+    center: { lat: lat, lng: lng },
+    zoom: hasCoords ? 12 : 4,
+    styles: darkStyle,
+    disableDefaultUI: true,
+    zoomControl: true,
+    mapTypeControl: false
   });
-  html += '</div>';
-  el.innerHTML = html;
+  reState.mapInstance = map;
+  reState.mapMarkers = [];
+
+  var bounds = new google.maps.LatLngBounds();
+  var hasMarkers = false;
+
+  properties.forEach(function(p, idx) {
+    if (p.latitude && p.longitude) {
+      hasMarkers = true;
+      var price = p.price ? '$' + Number(p.price).toLocaleString() : '';
+      var marker = new google.maps.Marker({
+        position: { lat: p.latitude, lng: p.longitude },
+        map: map,
+        title: (p.formattedAddress || p.address || '') + ' ' + price,
+        label: {
+          text: price || (idx + 1).toString(),
+          color: '#000',
+          fontSize: '10px',
+          fontWeight: '800'
+        },
+        icon: {
+          path: google.maps.SymbolPath.CIRCLE,
+          scale: 14,
+          fillColor: '#D4A843',
+          fillOpacity: 0.95,
+          strokeColor: '#fff',
+          strokeWeight: 2
+        }
+      });
+      bounds.extend(marker.getPosition());
+      reState.mapMarkers.push(marker);
+
+      var infoContent = '<div style="background:#1a1a1a;color:#E5E5E5;padding:12px;border-radius:8px;min-width:200px;font-family:Inter,sans-serif;">' +
+        '<div style="font-weight:800;font-size:14px;color:#D4A843;margin-bottom:4px;">' + price + '</div>' +
+        '<div style="font-size:12px;margin-bottom:4px;">' + (p.formattedAddress || p.address || '') + '</div>' +
+        '<div style="font-size:11px;color:#888;">' + (p.bedrooms || p.beds || '—') + ' bd | ' + (p.bathrooms || p.baths || '—') + ' ba' + (p.squareFootage ? ' | ' + Number(p.squareFootage).toLocaleString() + ' sqft' : '') + '</div>' +
+        '<button onclick="reSelectProperty(' + idx + ',\'sale\')" style="margin-top:8px;background:#D4A843;color:#000;border:none;border-radius:6px;padding:4px 12px;font-size:11px;font-weight:700;cursor:pointer;">View Details</button>' +
+        '</div>';
+
+      var infoWindow = new google.maps.InfoWindow({ content: infoContent });
+      marker.addListener('click', function() {
+        infoWindow.open(map, marker);
+      });
+    }
+  });
+
+  if (hasMarkers) {
+    map.fitBounds(bounds);
+    if (properties.length === 1) map.setZoom(15);
+  }
 }
 
 function reRenderPropertyCard(p, idx, type) {
@@ -143,9 +273,159 @@ function reSelectProperty(idx, type) {
   var list = type === 'distressed' ? reState.distressedResults : reState.searchResults;
   var p = list[idx];
   if (!p) return;
+  reState.selectedPropertyIdx = idx;
   var addr = p.formattedAddress || p.addressLine1 || p.address || '';
-  var full = addr + (p.city ? ', ' + p.city : '') + (p.state ? ', ' + p.state : '');
-  reGetComps(full);
+  var city = p.city || '';
+  var state = p.state || '';
+  var full = addr + (city ? ', ' + city : '') + (state ? ', ' + state : '');
+
+  var el = document.getElementById('reSearchResults');
+  if (!el) return;
+
+  var price = p.price ? '$' + Number(p.price).toLocaleString() : 'Price N/A';
+  var beds = p.bedrooms || p.beds || '—';
+  var baths = p.bathrooms || p.baths || '—';
+  var sqft = (p.squareFootage || p.sqft) ? Number(p.squareFootage || p.sqft).toLocaleString() + ' sqft' : '';
+  var img = p.imageUrl || p.image || '';
+  var yearBuilt = p.yearBuilt || '';
+
+  var html = '<button class="re-back-btn" data-testid="re-detail-back" onclick="reRenderSearchResults()">&larr; Back to results</button>';
+
+  // Property detail header
+  html += '<div style="display:grid;grid-template-columns:' + (img ? '300px' : '') + ' 1fr;gap:20px;margin-bottom:20px;">';
+  if (img) {
+    html += '<div style="border-radius:12px;overflow:hidden;background:#1a1a1a;height:220px;">' +
+      '<img src="' + escapeAttr(img) + '" style="width:100%;height:100%;object-fit:cover;" onerror="this.parentElement.innerHTML=\'<div style=padding:60px;text-align:center;color:#555;><i class=fas fa-home style=font-size:48px;></i></div>\'" />' +
+      '</div>';
+  }
+  html += '<div>';
+  html += '<div style="font-size:24px;font-weight:900;color:#D4A843;margin-bottom:6px;">' + price + '</div>';
+  html += '<div style="font-size:16px;font-weight:700;color:#E5E5E5;margin-bottom:4px;">' + escapeHtml(addr) + '</div>';
+  html += '<div style="font-size:13px;color:#888;margin-bottom:12px;">' + escapeHtml(city) + (state ? ', ' + state : '') + '</div>';
+  html += '<div style="display:flex;gap:16px;margin-bottom:16px;">';
+  html += '<span style="color:#E5E5E5;font-weight:600;">' + beds + ' <span style="color:#888;font-weight:400;">beds</span></span>';
+  html += '<span style="color:#E5E5E5;font-weight:600;">' + baths + ' <span style="color:#888;font-weight:400;">baths</span></span>';
+  if (sqft) html += '<span style="color:#E5E5E5;font-weight:600;">' + sqft + '</span>';
+  if (yearBuilt) html += '<span style="color:#E5E5E5;font-weight:600;">' + yearBuilt + ' <span style="color:#888;font-weight:400;">built</span></span>';
+  html += '</div>';
+  html += '<div style="display:flex;gap:8px;flex-wrap:wrap;">';
+  html += '<button class="re-btn-sm accent-green" data-testid="re-detail-analyze" onclick="reQuickDeal(\'' + escapeAttr(addr) + '\',' + (p.price || 0) + ')"><i class="fas fa-calculator"></i> Analyze Deal</button>';
+  html += '<button class="re-btn-sm outline" data-testid="re-detail-save" onclick="reSaveToPortfolio(' + idx + ',\'' + type + '\')"><i class="fas fa-bookmark"></i> Save</button>';
+  html += '<button class="re-btn-sm" data-testid="re-detail-ask-sal" onclick="reSALChat(\'' + escapeAttr('Give me a full investment analysis for: ' + full) + '\')"><i class="fas fa-comment"></i> Ask SAL</button>';
+  html += '</div>';
+  html += '</div></div>';
+
+  // Map + details sections
+  html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;">';
+
+  // Mini map
+  if (p.latitude && p.longitude) {
+    html += '<div>';
+    html += '<div style="font-size:13px;font-weight:700;color:#E5E5E5;margin-bottom:8px;"><i class="fas fa-map"></i> Location</div>';
+    html += '<div id="reDetailMap" data-testid="re-detail-map" style="width:100%;height:200px;border-radius:10px;overflow:hidden;border:1px solid rgba(212,168,67,0.2);"></div>';
+    html += '</div>';
+  }
+
+  // Property details
+  html += '<div>';
+  html += '<div style="font-size:13px;font-weight:700;color:#E5E5E5;margin-bottom:8px;"><i class="fas fa-info-circle"></i> Property Details</div>';
+  html += '<div style="background:rgba(255,255,255,0.03);border-radius:10px;padding:14px;border:1px solid rgba(255,255,255,0.06);">';
+  var details = [
+    ['Type', p.propertyType || p.type || '—'],
+    ['Lot Size', p.lotSize ? Number(p.lotSize).toLocaleString() + ' sqft' : '—'],
+    ['Year Built', yearBuilt || '—'],
+    ['Status', p.status || 'Active'],
+    ['Taxes', p.taxAmount ? '$' + Number(p.taxAmount).toLocaleString() + '/yr' : '—'],
+    ['HOA', p.hoaFee ? '$' + Number(p.hoaFee).toLocaleString() + '/mo' : 'N/A'],
+  ];
+  details.forEach(function(d) {
+    html += '<div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid rgba(255,255,255,0.04);font-size:12px;">' +
+      '<span style="color:#888;">' + d[0] + '</span><span style="color:#E5E5E5;font-weight:600;">' + d[1] + '</span></div>';
+  });
+  html += '</div></div></div>';
+
+  // Valuation section (will be loaded async)
+  html += '<div id="reDetailValuation" style="margin-bottom:16px;">' +
+    '<div class="re-loading"><div class="re-spinner"></div>Loading valuation & comps...</div></div>';
+
+  el.innerHTML = html;
+
+  // Load detail map
+  if (p.latitude && p.longitude) {
+    setTimeout(function() {
+      var mapEl = document.getElementById('reDetailMap');
+      if (mapEl && typeof google !== 'undefined' && google.maps) {
+        var map = new google.maps.Map(mapEl, {
+          center: { lat: p.latitude, lng: p.longitude },
+          zoom: 15,
+          styles: [
+            {elementType:"geometry",stylers:[{color:"#1d1d1d"}]},
+            {elementType:"labels.text.stroke",stylers:[{color:"#1d1d1d"}]},
+            {elementType:"labels.text.fill",stylers:[{color:"#8a8a8a"}]},
+            {featureType:"road",elementType:"geometry",stylers:[{color:"#2c2c2c"}]},
+            {featureType:"water",elementType:"geometry",stylers:[{color:"#0e1626"}]}
+          ],
+          disableDefaultUI: true, zoomControl: true
+        });
+        new google.maps.Marker({
+          position: { lat: p.latitude, lng: p.longitude },
+          map: map,
+          icon: { path: google.maps.SymbolPath.CIRCLE, scale: 14, fillColor: '#D4A843', fillOpacity: 0.95, strokeColor: '#fff', strokeWeight: 2 }
+        });
+      }
+    }, 200);
+  }
+
+  // Load valuation async
+  reLoadPropertyValuation(full);
+}
+
+async function reLoadPropertyValuation(address) {
+  var el = document.getElementById('reDetailValuation');
+  if (!el) return;
+
+  try {
+    var [valResp, rentResp] = await Promise.all([
+      fetch(API + '/api/realestate/value?address=' + encodeURIComponent(address), { headers: authHeaders() }),
+      fetch(API + '/api/realestate/rent?address=' + encodeURIComponent(address), { headers: authHeaders() })
+    ]);
+    var valData = await valResp.json();
+    var rentData = await rentResp.json();
+    var vd = valData.data || valData;
+    var rd = rentData.data || rentData;
+
+    var html = '<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">';
+
+    // Valuation card
+    html += '<div style="background:rgba(255,255,255,0.03);border-radius:10px;padding:16px;border:1px solid rgba(212,168,67,0.15);">';
+    html += '<div style="font-size:13px;font-weight:700;color:#D4A843;margin-bottom:10px;"><i class="fas fa-chart-line"></i> Valuation</div>';
+    if (vd && (vd.price || vd.priceRangeLow)) {
+      html += '<div style="font-size:22px;font-weight:900;color:#00FF88;">$' + Number(vd.price || 0).toLocaleString() + '</div>';
+      html += '<div style="font-size:11px;color:#888;margin-top:4px;">Range: $' + Number(vd.priceRangeLow || 0).toLocaleString() + ' - $' + Number(vd.priceRangeHigh || 0).toLocaleString() + '</div>';
+    } else {
+      html += '<div style="color:#888;font-size:12px;">Valuation unavailable</div>';
+    }
+    html += '</div>';
+
+    // Rent estimate card
+    html += '<div style="background:rgba(255,255,255,0.03);border-radius:10px;padding:16px;border:1px solid rgba(0,255,136,0.15);">';
+    html += '<div style="font-size:13px;font-weight:700;color:#00FF88;margin-bottom:10px;"><i class="fas fa-money-bill-wave"></i> Rent Estimate</div>';
+    if (rd && (rd.rent || rd.rentRangeLow)) {
+      html += '<div style="font-size:22px;font-weight:900;color:#D4A843;">$' + Number(rd.rent || 0).toLocaleString() + '<span style="font-size:12px;color:#888;">/mo</span></div>';
+      html += '<div style="font-size:11px;color:#888;margin-top:4px;">Range: $' + Number(rd.rentRangeLow || 0).toLocaleString() + ' - $' + Number(rd.rentRangeHigh || 0).toLocaleString() + '</div>';
+      if (vd.price && rd.rent) {
+        var grossYield = ((rd.rent * 12) / vd.price * 100).toFixed(1);
+        html += '<div style="margin-top:6px;font-size:12px;color:' + (grossYield >= 6 ? '#00FF88' : '#D4A843') + ';font-weight:700;">Gross Yield: ' + grossYield + '%</div>';
+      }
+    } else {
+      html += '<div style="color:#888;font-size:12px;">Rent estimate unavailable</div>';
+    }
+    html += '</div></div>';
+
+    el.innerHTML = html;
+  } catch(e) {
+    el.innerHTML = '<div style="color:#888;font-size:12px;text-align:center;padding:20px;">Valuation data unavailable.</div>';
+  }
 }
 
 async function reGetComps(address) {

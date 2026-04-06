@@ -13991,67 +13991,133 @@ function ccSearch() {
   var panel = document.getElementById('cc-results-price');
   if (!panel) return;
   ccSwitchTab('price', document.getElementById('cc-tab-price'));
-  panel.innerHTML = '<div style="color:#F59E0B;text-align:center;padding:40px;"><div style="font-size:24px;margin-bottom:8px;">🃏</div>Analyzing market data...</div>';
-  var msg = 'What is the current market price and investment analysis for the trading card: ' + q + '. Include: PSA graded values (1-10), raw price, recent eBay sold listings, trend (rising/falling), population report if available. Format with clear headers and prices.';
-  fetch('/api/chat', {
-    method: 'POST',
-    headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({message: msg, vertical: 'search', system_context: 'You are a trading card market expert. Give precise current pricing data from PSA, PWCC, eBay, and TCGPlayer. Always cite sources.'})
-  }).then(function(r) {
-    var reader = r.body.getReader();
-    var decoder = new TextDecoder();
-    var buffer = '';
-    var raw = '';
-    function read() {
-      reader.read().then(function(result) {
-        if (result.done) { return; }
-        buffer += decoder.decode(result.value, {stream: true});
-        var lines = buffer.split('\n'); buffer = lines.pop();
-        lines.forEach(function(line) {
-          if (!line.startsWith('data: ')) return;
-          try {
-            var d = JSON.parse(line.slice(6));
-            if (d.type === 'text' && d.content) { raw += d.content; panel.innerHTML = '<div style="color:#E5E5E5;line-height:1.8;font-size:13px;">' + formatMarkdown(raw) + '</div>'; }
-          } catch(e) {}
-        });
-        read();
+  panel.innerHTML = '<div style="color:#F59E0B;text-align:center;padding:40px;"><div style="font-size:24px;margin-bottom:8px;"></div>Searching card databases...</div>';
+
+  // Hit real card search + price endpoints in parallel
+  Promise.all([
+    fetch(API + '/api/cards/search', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({query: q}) }).then(function(r) { return r.json(); }),
+    fetch(API + '/api/cards/price', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({card_name: q, card_type: 'tcg'}) }).then(function(r) { return r.json(); })
+  ]).then(function(results) {
+    var searchData = results[0];
+    var priceData = results[1];
+    var cards = searchData.results || [];
+    var ebay = priceData.ebay_listings || [];
+    var tcg = priceData.tcgplayer || {};
+
+    var html = '';
+
+    // TCGPlayer price summary
+    if (tcg && Object.keys(tcg).length > 0) {
+      html += '<div style="background:linear-gradient(135deg,rgba(245,158,11,0.1),rgba(212,168,67,0.05));border:1px solid rgba(245,158,11,0.3);border-radius:12px;padding:16px;margin-bottom:16px;">';
+      html += '<div style="font-size:13px;font-weight:800;color:#F59E0B;margin-bottom:10px;"><i class="fas fa-chart-line"></i> TCGPlayer Market Prices</div>';
+      html += '<div style="display:flex;gap:12px;flex-wrap:wrap;">';
+      Object.keys(tcg).forEach(function(variant) {
+        var p = tcg[variant];
+        if (p && p.market) {
+          html += '<div style="background:rgba(0,0,0,0.3);border-radius:8px;padding:10px 14px;min-width:120px;">';
+          html += '<div style="font-size:10px;color:#888;text-transform:uppercase;letter-spacing:0.5px;">' + variant.replace(/([A-Z])/g, ' $1').trim() + '</div>';
+          html += '<div style="font-size:18px;font-weight:900;color:#00FF88;">$' + p.market.toFixed(2) + '</div>';
+          html += '<div style="font-size:10px;color:#666;">Low: $' + (p.low || 0).toFixed(2) + ' &mdash; High: $' + (p.high || 0).toFixed(2) + '</div>';
+          html += '</div>';
+        }
       });
+      html += '</div></div>';
     }
-    read();
-  }).catch(function() { panel.innerHTML = '<div style="color:#f87171;text-align:center;padding:20px;">Unable to fetch card data. Try again.</div>'; });
+
+    // Card grid from Pokemon TCG API
+    if (cards.length > 0) {
+      html += '<div style="font-size:13px;font-weight:700;color:#E5E5E5;margin-bottom:10px;">' + cards.length + ' cards found</div>';
+      html += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;margin-bottom:16px;">';
+      cards.forEach(function(c) {
+        html += '<div data-testid="cc-card-result" style="background:rgba(255,255,255,0.03);border:1px solid rgba(245,158,11,0.15);border-radius:10px;overflow:hidden;cursor:pointer;transition:all 0.2s;" onmouseover="this.style.borderColor=\'rgba(245,158,11,0.5)\';this.style.transform=\'translateY(-2px)\'" onmouseout="this.style.borderColor=\'rgba(245,158,11,0.15)\';this.style.transform=\'none\'">';
+        if (c.image_small) {
+          html += '<div style="height:180px;background:#111;display:flex;align-items:center;justify-content:center;overflow:hidden;">';
+          html += '<img src="' + escapeAttr(c.image_small) + '" style="max-height:100%;max-width:100%;object-fit:contain;" onerror="this.style.display=\'none\'" />';
+          html += '</div>';
+        }
+        html += '<div style="padding:10px;">';
+        html += '<div style="font-size:12px;font-weight:700;color:#E5E5E5;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + escapeHtml(c.name) + '</div>';
+        html += '<div style="font-size:10px;color:#888;margin-top:2px;">' + escapeHtml(c.set_name || '') + (c.rarity ? ' &middot; ' + c.rarity : '') + '</div>';
+        if (c.market_price) {
+          html += '<div style="font-size:14px;font-weight:900;color:#00FF88;margin-top:6px;">$' + c.market_price.toFixed(2) + '</div>';
+        }
+        if (c.tcgplayer_url) {
+          html += '<a href="' + escapeAttr(c.tcgplayer_url) + '" target="_blank" style="font-size:10px;color:#F59E0B;text-decoration:none;display:block;margin-top:4px;">View on TCGPlayer &rarr;</a>';
+        }
+        html += '</div></div>';
+      });
+      html += '</div>';
+    }
+
+    // eBay listings
+    if (ebay.length > 0) {
+      html += '<div style="font-size:13px;font-weight:700;color:#E5E5E5;margin-bottom:8px;"><i class="fab fa-ebay" style="color:#e53238;"></i> eBay Recent Listings</div>';
+      html += '<div style="display:flex;flex-direction:column;gap:6px;margin-bottom:16px;">';
+      ebay.forEach(function(l) {
+        html += '<a href="' + escapeAttr(l.url || '#') + '" target="_blank" style="display:block;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);border-radius:8px;padding:10px 14px;text-decoration:none;transition:all 0.15s;" onmouseover="this.style.borderColor=\'rgba(245,158,11,0.3)\'" onmouseout="this.style.borderColor=\'rgba(255,255,255,0.06)\'">';
+        html += '<div style="font-size:12px;font-weight:600;color:#E5E5E5;">' + escapeHtml(l.title || '') + '</div>';
+        if (l.snippet) html += '<div style="font-size:11px;color:#666;margin-top:2px;">' + escapeHtml(l.snippet.substring(0, 120)) + '</div>';
+        html += '</a>';
+      });
+      html += '</div>';
+    }
+
+    if (!html) {
+      html = '<div style="color:#888;text-align:center;padding:40px;">No results found for "' + escapeHtml(q) + '". Try a different search.</div>';
+    }
+
+    panel.innerHTML = html;
+  }).catch(function(e) {
+    panel.innerHTML = '<div style="color:#f87171;text-align:center;padding:20px;">Search failed. Try again.</div>';
+    console.error('[CookinCards] Search error:', e);
+  });
 }
 
 function ccLoadDeals() {
   var panel = document.getElementById('cc-results-deals');
   if (!panel) return;
-  panel.innerHTML = '<div style="color:#F59E0B;text-align:center;padding:40px;"><div style="font-size:24px;margin-bottom:8px;">🔥</div>Scanning for undervalued deals...</div>';
-  var msg = 'Find the top 10 trading card deals right now — cards selling significantly below their market value. Include Pokemon, sports cards (NBA, NFL, MLB rookies), and rare MTG. For each: card name, current listing price, actual market value, % discount, and why it\'s a good buy.';
-  fetch('/api/chat', {
-    method: 'POST',
-    headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({message: msg, vertical: 'search', system_context: 'You are a trading card arbitrage expert. Find real undervalued deals using PSA, eBay, PWCC, and Goldin Auctions data.'})
-  }).then(function(r) {
-    var reader = r.body.getReader();
-    var decoder = new TextDecoder();
-    var buffer = '';
-    var raw = '';
-    function read() {
-      reader.read().then(function(result) {
-        if (result.done) return;
-        buffer += decoder.decode(result.value, {stream: true});
-        var lines = buffer.split('\n'); buffer = lines.pop();
-        lines.forEach(function(line) {
-          if (!line.startsWith('data: ')) return;
-          try {
-            var d = JSON.parse(line.slice(6));
-            if (d.type === 'text' && d.content) { raw += d.content; panel.innerHTML = '<div style="color:#E5E5E5;line-height:1.8;font-size:13px;">' + formatMarkdown(raw) + '</div>'; }
-          } catch(e) {}
+  panel.innerHTML = '<div style="color:#F59E0B;text-align:center;padding:40px;">Scanning for undervalued deals...</div>';
+
+  fetch(API + '/api/cards/market/trending', { headers: authHeaders() })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      var html = '';
+      var articles = data.trending_articles || [];
+      var trending = data.trending || [];
+
+      if (trending.length > 0) {
+        html += '<div style="font-size:13px;font-weight:700;color:#F59E0B;margin-bottom:10px;">Hot Cards Right Now</div>';
+        html += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px;margin-bottom:20px;">';
+        trending.forEach(function(t) {
+          html += '<div style="background:rgba(245,158,11,0.05);border:1px solid rgba(245,158,11,0.15);border-radius:10px;padding:14px;">';
+          html += '<div style="font-size:13px;font-weight:700;color:#E5E5E5;">' + escapeHtml(t.name) + '</div>';
+          html += '<div style="font-size:11px;color:#888;">' + escapeHtml(t.set || '') + ' &middot; ' + escapeHtml(t.category || '') + '</div>';
+          html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px;">';
+          html += '<span style="font-size:16px;font-weight:900;color:#00FF88;">$' + (t.current_price || 0).toLocaleString() + '</span>';
+          html += '<span style="font-size:12px;font-weight:700;color:' + (t.price_change && t.price_change.includes('+') ? '#00FF88' : '#f87171') + ';">' + escapeHtml(t.price_change || '') + '</span>';
+          html += '</div></div>';
         });
-        read();
-      });
-    }
-    read();
-  }).catch(function() { panel.innerHTML = '<div style="color:#f87171;text-align:center;padding:20px;">Unable to fetch deals. Try again.</div>'; });
+        html += '</div>';
+      }
+
+      if (articles.length > 0) {
+        html += '<div style="font-size:13px;font-weight:700;color:#E5E5E5;margin-bottom:8px;"><i class="fas fa-newspaper"></i> Latest Market Intel</div>';
+        articles.forEach(function(a) {
+          html += '<a href="' + escapeAttr(a.url || '#') + '" target="_blank" style="display:block;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);border-radius:8px;padding:12px;margin-bottom:6px;text-decoration:none;transition:border-color 0.15s;" onmouseover="this.style.borderColor=\'rgba(245,158,11,0.3)\'" onmouseout="this.style.borderColor=\'rgba(255,255,255,0.06)\'">';
+          html += '<div style="font-size:13px;font-weight:600;color:#E5E5E5;">' + escapeHtml(a.title || '') + '</div>';
+          if (a.snippet) html += '<div style="font-size:11px;color:#666;margin-top:4px;">' + escapeHtml(a.snippet) + '</div>';
+          html += '</a>';
+        });
+      }
+
+      if (!html) {
+        html = '<div style="color:#888;text-align:center;padding:40px;">No trending data available. Check back later.</div>';
+      }
+
+      html += '<div style="text-align:right;font-size:10px;color:#555;margin-top:10px;">Source: ' + (data.source || 'cached') + ' &middot; Updated: ' + (data.updated_at || 'N/A').substring(0,19) + '</div>';
+      panel.innerHTML = html;
+    })
+    .catch(function() { panel.innerHTML = '<div style="color:#f87171;text-align:center;padding:20px;">Unable to fetch deals. Try again.</div>'; });
 }
 // ─── COOKIN CARDS — SCAN & GRADE ──────────────────────────────────────────────
 
@@ -14184,20 +14250,116 @@ async function ccRunScan(imageUrl, imageBase64) {
     }
 
     results.innerHTML = h;
+    // Celebration animation based on card value tier
+    ccCelebrate(scanData.celebration_tier || 'common', scanData.estimated_value);
     if (typeof salLogUsage === 'function') salLogUsage('card_scan', 5);
   } catch (e) {
     results.innerHTML = '<div style="background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);border-radius:12px;padding:16px;color:#f87171;font-size:12px;">Scan failed: ' + e.message + '. Check your internet connection and try again.</div>';
   }
 }
 
+function ccCelebrate(tier, value) {
+  // Remove any existing celebration overlay
+  var existing = document.getElementById('cc-celebration');
+  if (existing) existing.remove();
+
+  if (tier === 'common') {
+    // Subtle gold sparkle
+    var sparkle = document.createElement('div');
+    sparkle.id = 'cc-celebration';
+    sparkle.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:9999;';
+    var particles = '';
+    for (var i = 0; i < 15; i++) {
+      var x = Math.random() * 100;
+      var y = Math.random() * 100;
+      var delay = Math.random() * 0.5;
+      var size = 2 + Math.random() * 4;
+      particles += '<div style="position:absolute;left:' + x + '%;top:' + y + '%;width:' + size + 'px;height:' + size + 'px;background:#D4A843;border-radius:50%;animation:ccSparkle 1s ease-out ' + delay + 's forwards;opacity:0;"></div>';
+    }
+    sparkle.innerHTML = particles;
+    document.body.appendChild(sparkle);
+    setTimeout(function() { sparkle.remove(); }, 2000);
+    return;
+  }
+
+  var overlay = document.createElement('div');
+  overlay.id = 'cc-celebration';
+  overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:9999;overflow:hidden;';
+
+  if (tier === 'rare') {
+    // Confetti burst + value callout
+    var confetti = '';
+    var colors = ['#F59E0B', '#D4A843', '#00FF88', '#3B82F6', '#8B5CF6', '#EF4444', '#EC4899'];
+    for (var j = 0; j < 60; j++) {
+      var cx = 40 + Math.random() * 20;
+      var cd = Math.random() * 0.8;
+      var cl = colors[Math.floor(Math.random() * colors.length)];
+      var cs = 4 + Math.random() * 8;
+      var crot = Math.random() * 360;
+      confetti += '<div style="position:absolute;left:' + cx + '%;top:-10px;width:' + cs + 'px;height:' + (cs * 0.6) + 'px;background:' + cl + ';transform:rotate(' + crot + 'deg);animation:ccConfettiFall ' + (1.5 + Math.random()) + 's ease-in ' + cd + 's forwards;opacity:0;border-radius:1px;"></div>';
+    }
+    confetti += '<div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center;animation:ccBounceIn 0.5s ease-out forwards;opacity:0;">' +
+      '<div style="font-size:36px;font-weight:900;color:#F59E0B;text-shadow:0 0 20px rgba(245,158,11,0.5);">NICE PULL!</div>' +
+      (value ? '<div style="font-size:24px;font-weight:800;color:#00FF88;margin-top:4px;">$' + Number(value).toLocaleString() + '</div>' : '') +
+      '</div>';
+    overlay.innerHTML = confetti;
+  } else if (tier === 'grail') {
+    // Full fireworks + GRAIL ALERT banner
+    var fw = '';
+    for (var k = 0; k < 80; k++) {
+      var fx = Math.random() * 100;
+      var fy = Math.random() * 60 + 10;
+      var fd = Math.random();
+      var fc = ['#FFD700', '#FF6B35', '#00FF88', '#FF1493', '#00BFFF'][Math.floor(Math.random() * 5)];
+      var fs = 3 + Math.random() * 6;
+      fw += '<div style="position:absolute;left:' + fx + '%;top:' + fy + '%;width:' + fs + 'px;height:' + fs + 'px;background:' + fc + ';border-radius:50%;animation:ccFirework ' + (0.8 + Math.random() * 0.8) + 's ease-out ' + fd + 's forwards;opacity:0;box-shadow:0 0 6px ' + fc + ';"></div>';
+    }
+    fw += '<div style="position:absolute;top:40%;left:50%;transform:translate(-50%,-50%);text-align:center;animation:ccBounceIn 0.3s ease-out forwards;opacity:0;">' +
+      '<div style="font-size:14px;letter-spacing:4px;color:#FF6B35;font-weight:800;margin-bottom:4px;">GRAIL ALERT</div>' +
+      '<div style="font-size:48px;font-weight:900;background:linear-gradient(135deg,#FFD700,#FF6B35);-webkit-background-clip:text;-webkit-text-fill-color:transparent;">$' + Number(value || 0).toLocaleString() + '</div>' +
+      '</div>';
+    overlay.innerHTML = fw;
+  } else if (tier === 'gem_mint') {
+    // Rainbow holographic effect
+    var rainbow = '<div style="position:absolute;top:0;left:0;width:100%;height:100%;background:conic-gradient(from 0deg, rgba(255,0,0,0.1), rgba(255,165,0,0.1), rgba(255,255,0,0.1), rgba(0,128,0,0.1), rgba(0,0,255,0.1), rgba(128,0,128,0.1), rgba(255,0,0,0.1));animation:ccRainbowSpin 2s linear infinite;"></div>';
+    rainbow += '<div style="position:absolute;top:40%;left:50%;transform:translate(-50%,-50%);text-align:center;animation:ccBounceIn 0.3s ease-out forwards;opacity:0;">' +
+      '<div style="font-size:14px;letter-spacing:4px;color:#00BFFF;font-weight:800;margin-bottom:4px;">GEM MINT</div>' +
+      '<div style="font-size:42px;font-weight:900;background:linear-gradient(135deg,#FF0000,#FF7700,#FFFF00,#00FF00,#0000FF,#8B00FF);-webkit-background-clip:text;-webkit-text-fill-color:transparent;">PSA 10</div>' +
+      '</div>';
+    overlay.innerHTML = rainbow;
+  }
+
+  document.body.appendChild(overlay);
+  setTimeout(function() { overlay.remove(); }, 3500);
+}
+
+// Celebration CSS keyframes (injected once)
+(function() {
+  if (document.getElementById('cc-celebration-styles')) return;
+  var style = document.createElement('style');
+  style.id = 'cc-celebration-styles';
+  style.textContent = '' +
+    '@keyframes ccSparkle { 0% { opacity:0; transform:scale(0); } 50% { opacity:1; transform:scale(1.5); } 100% { opacity:0; transform:scale(0); } }' +
+    '@keyframes ccConfettiFall { 0% { opacity:1; transform:translateY(0) rotate(0deg); } 100% { opacity:0; transform:translateY(100vh) rotate(720deg); } }' +
+    '@keyframes ccBounceIn { 0% { opacity:0; transform:translate(-50%,-50%) scale(0.3); } 60% { opacity:1; transform:translate(-50%,-50%) scale(1.1); } 100% { opacity:1; transform:translate(-50%,-50%) scale(1); } }' +
+    '@keyframes ccFirework { 0% { opacity:0; transform:scale(0); } 20% { opacity:1; transform:scale(1); } 100% { opacity:0; transform:scale(0) translateY(-30px); } }' +
+    '@keyframes ccRainbowSpin { from { transform:rotate(0deg); } to { transform:rotate(360deg); } }' +
+    '@keyframes ccFloat { 0%,100% { transform:translateY(0); } 50% { transform:translateY(-6px); } }';
+  document.head.appendChild(style);
+})();
+
 function ccAddToPortfolio(name, set, grade, value) {
   fetch(API + '/api/cards/collection/add', {
-    method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ card_name: name, card_set: set, grade_estimate: grade, estimated_value: value })
-  }).then(function() {
+    method: 'POST', headers: Object.assign({ 'Content-Type': 'application/json' }, authHeaders()),
+    body: JSON.stringify({ card_name: name, card_set: set, grade_estimate: grade, estimated_value: value, card_type: ccScanState.cardType })
+  }).then(function(r) { return r.json(); }).then(function(d) {
     var btn = document.querySelector('[data-testid="cc-add-portfolio"]');
-    if (btn) { btn.textContent = 'Added!'; btn.style.background = 'rgba(34,197,94,0.15)'; btn.style.color = '#22c55e'; btn.style.borderColor = 'rgba(34,197,94,0.3)'; btn.disabled = true; }
-  }).catch(function() {});
+    if (btn) { btn.textContent = d.status === 'added' ? 'Added to Collection!' : 'Saved Locally'; btn.style.background = 'rgba(34,197,94,0.15)'; btn.style.color = '#22c55e'; btn.style.borderColor = 'rgba(34,197,94,0.3)'; btn.disabled = true; }
+    if (d.note) console.log('[CookinCards]', d.note);
+  }).catch(function() {
+    var btn = document.querySelector('[data-testid="cc-add-portfolio"]');
+    if (btn) { btn.textContent = 'Save Failed'; btn.style.color = '#f87171'; }
+  });
 }
 
 // ─── END COOKIN CARDS ─────────────────────────────────────────────────────────
