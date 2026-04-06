@@ -1,7 +1,7 @@
 # SaintSal Labs Platform — PRD
 
 ## Original Problem Statement
-Extend the SaintSal Labs platform with 8 intelligence verticals, Builder v2 (5-agent pipeline), Career & Business Intelligence suites, Creative Studio, Launch Pad (Business Formation), CookinCards, and Pricing/Metering. Retain existing dark/gold aesthetic. Wire Supabase for data persistence. Integrate 3rd party APIs.
+Extend the SaintSal Labs platform with 8 intelligence verticals, Builder v2, Career & Business Intelligence suites, Creative Studio, Launch Pad, CookinCards, and Pricing/Metering. Deep GHL integration for automation. Vercel deployment pipeline. DNA-everywhere philosophy.
 
 ## Architecture
 - **Backend**: FastAPI (Python) on port 8001, modular routers in `/app/backend/routers/`
@@ -9,74 +9,77 @@ Extend the SaintSal Labs platform with 8 intelligence verticals, Builder v2 (5-a
 - **Database**: Supabase (PostgreSQL, Auth, Storage)
 - **Auth**: Supabase Auth with JWT, auto-confirm on login
 - **Admin**: Super Admin = ryan@cookin.io (full user/tier/account management)
+- **APIs**: Tavily (search), RentCast (real estate), Ximilar (card grading), Google Maps/Vision, Pokemon TCG API, Anthropic/OpenAI/xAI (LLMs), Stripe, Resend, GHL
 
 ## What's Been Implemented
 
-### Phase 1-3: Core Platform (DONE)
-- Full-stack FastAPI + Vanilla JS with Supabase Auth/Storage
-- Career Suite: Resume Builder, Cover Letter, Email Signatures, Job Search (Tavily), Job Tracker Kanban
-- Builder v2 with 5-agent pipeline and Business DNA injection
-- Real Estate, Medical, Finance, Sports, News, CookinCards verticals
-- Voice AI Engine
-- Admin Control Panel (Super Admin w/ user management, health checks, order fulfillment)
-- Command Palette (Cmd+K)
+### Core Platform (DONE)
+- FastAPI + Vanilla JS + Supabase Auth/Storage
+- 8 Intelligence Verticals (Real Estate, Medical, Finance, Sports, News, etc.)
+- Builder v2 with 5-agent pipeline + DNA injection
+- Voice AI Engine, Admin Control Panel, Command Palette (Cmd+K)
 - Metering/Pricing system
 
-### Phase 4-6: Career Suite Polish (DONE — Apr 5, 2026)
-- Resume PDF/DOCX export (working E2E)
-- Cover Letter PDF/DOCX export (working E2E)
-- Email Signature "Copy HTML" button
-- DNA autofill into Resume Builder
+### Career Suite (DONE — Apr 5-6, 2026)
+- Resume Builder with PDF/DOCX export
+- Cover Letter with PDF/DOCX export
+- Email Signatures with Copy HTML
 - Job Search returning real Tavily results
-- Kanban expanded to 14 statuses (wishlist, networking, saved, applied, phone_screen, assessment, interview_scheduled, interview_completed, reference_check, offer_received, negotiating, job_won, rejected, withdrawn)
+- **14-Status Kanban** (wishlist, networking, saved, applied, phone_screen, assessment, interview_scheduled, interview_completed, reference_check, offer_received, negotiating, job_won, rejected, withdrawn)
 - Stage coaching tips for all 14 statuses
-- Supabase Storage bucket for career uploads (headshots/backgrounds)
-- Auth bug fix (auto-confirm emails, password reset for ryan@cookin.io)
-- Career profile Supabase persistence
+- DNA autofill, Supabase Storage for uploads
 
-### Phase 7-9: Creative Studio (IN PROGRESS — Apr 6, 2026)
-- Backend: `studio_v2.py` router with Website Intel + Campaign Builder endpoints (DONE)
-- Supabase tables: website_crawls, marketing_campaigns, generated_assets, builder_sessions, email_sequences (DONE — migrated)
-- Kanban status constraint migration (DONE — 14 statuses)
-- Frontend UI stubs for Website Intel + Campaign Builder tabs in app.js (DONE)
-- Frontend UI logic (fetch + render) needs flesh out
+### Creative Studio Phase 7-9 (DONE — Apr 6, 2026)
+- `studio_v2.py` router: Website Intel + Campaign Builder endpoints
+- Supabase tables: website_crawls, marketing_campaigns, generated_assets, builder_sessions, email_sequences
+- **Website Intel → Business DNA auto-populate** (crawl extracts brand, saves to business_dna table)
 
-## Database Tables (Supabase)
-### Existing
-- profiles, resumes, cover_letters, email_signatures, job_applications, job_saved_searches
-- conversations, business_dna, compute_usage, marketing_content
+### CookinCards Enhancement (DONE — Apr 6, 2026)
+- **Real card search** via Pokemon TCG API (images, set names, rarity, prices)
+- **Real pricing** via eBay (Tavily) + TCGPlayer market prices
+- **Live trending** market data from Tavily (not hardcoded)
+- **PSA/BGS/SGC cert verification** via web lookup
+- **Google Cloud Vision** integration for enhanced recognition
+- **Celebration animations**: Common (gold sparkle), Rare >$50 (confetti + value), Grail >$500 (fireworks + GRAIL ALERT), Gem Mint PSA 10 (rainbow holographic)
+- **Supabase-backed collections** (pending migration)
+- **Portfolio value snapshots** over time (pending migration)
 
-### New (Phase 7-9 — Apr 6, 2026)
-- website_crawls, marketing_campaigns, generated_assets, builder_sessions, email_sequences
+### Real Estate Enhancement (DONE — Apr 6, 2026)
+- **Google Maps integration** with dark theme + gold markers
+- **Grid/Map view toggle** for search results
+- **Property info windows** on map markers
+- **Full property detail view** (Back button, valuation, rent estimate, mini map, property details grid)
+- Listings include latitude/longitude for mapping
+
+## Pending Supabase Migrations (User Must Run)
+1. `card_collections` + `card_portfolio_snapshots` — `/app/backend/migrations/cookincards_tables.sql`
 
 ## Key API Endpoints
-- `POST /api/auth/login` — Login with auto-confirm
-- `GET /api/career/v2/tracker` — 14-status Kanban
-- `GET /api/career/v2/resumes/{id}/export/{fmt}` — Resume PDF/DOCX
-- `GET /api/career/v2/cover-letters/{id}/export/{fmt}` — Cover Letter PDF/DOCX
-- `GET /api/career/jobs/search` — Tavily job search
-- `POST /api/studio/website-intel` — Website crawl + brand extraction
-- `POST /api/studio/campaigns/generate` — AI campaign generation
-- `GET /api/admin/check` — Admin access verification
-- `GET /api/admin/users` — User management (Super Admin)
+- Career: `/api/career/v2/tracker` (14 statuses), `/api/career/v2/resumes/{id}/export/{fmt}`, `/api/career/jobs/search`
+- Cards: `/api/cards/search`, `/api/cards/price`, `/api/cards/market/trending`, `/api/cards/verify-cert`, `/api/cards/collection`
+- Studio: `/api/studio/website-intel`, `/api/studio/campaigns/generate`
+- Real Estate: `/api/realestate/listings/sale`, `/api/realestate/value`, `/api/realestate/rent`
+- Admin: `/api/admin/check`, `/api/admin/users`
 
 ## Upcoming Tasks (Prioritized)
-### P0 — Current Focus
-- Flesh out Website Intel frontend (render crawl results, brand DNA display)
-- Flesh out Campaign Builder frontend (strategy, calendar, email sequence display)
-- E2E test Website Intel crawl flow with Tavily
+### P0 — Next
+- GHL integration (contacts sync, workflow triggers on signup/billing)
+- Builder deploys to Vercel (already partially wired)
+- Resend welcome email verification
+- DNS configuration for Builder custom domains
 
-### P1 — Next
-- Enhanced image generation pipeline (multi-provider: DALL-E, Flux, Runway)
+### P1
+- Campaign Builder frontend flesh-out (strategy, calendar, email sequence display)
 - Email Sequence Builder API & UI
-- Ad Creative Generator API & UI
-- Rate limiting on AI enhancement endpoints
+- Ad Creative Generator
+- Enhanced image generation pipeline (multi-provider)
 
 ### P2 — Future
 - Analytics dashboard for campaigns
 - A/B testing for ad variants
-- GHL integration for email sequences
+- GHL subaccount provisioning for new users
 - Deploy to Cloudflare Pages + custom domains
 - Live data feeds + tickers
 - Investment & Lending Portfolios
 - Smart Memory System (pgvector)
+- Rate limiting on AI endpoints
